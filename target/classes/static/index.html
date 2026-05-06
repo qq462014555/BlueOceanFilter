@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>蓝海词筛选系统</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; min-height: 100vh; }
+        .container { max-width: 800px; margin: 0 auto; padding: 40px 20px; }
+        h1 { text-align: center; color: #1a1a2e; margin-bottom: 30px; font-size: 28px; }
+
+        .card { background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); padding: 30px; margin-bottom: 20px; }
+        .card h2 { font-size: 18px; color: #333; margin-bottom: 15px; border-bottom: 2px solid #e8e8e8; padding-bottom: 10px; }
+
+        .nav-bar { display: flex; gap: 12px; margin-bottom: 30px; justify-content: center; }
+        .nav-bar a { padding: 10px 24px; background: #fff; color: #1890ff; border: 2px solid #1890ff; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 600; transition: all 0.2s; }
+        .nav-bar a:hover { background: #1890ff; color: #fff; }
+        .nav-bar a.active { background: #1890ff; color: #fff; }
+
+        .upload-area { border: 2px dashed #d0d0d0; border-radius: 8px; padding: 40px; text-align: center; cursor: pointer; transition: all 0.3s; }
+        .upload-area:hover, .upload-area.dragover { border-color: #1890ff; background: #f0f8ff; }
+        .upload-area p { color: #666; font-size: 16px; margin-bottom: 10px; }
+        .upload-area .hint { font-size: 13px; color: #999; }
+        #fileInput { display: none; }
+
+        .btn { display: inline-block; padding: 10px 30px; background: #1890ff; color: #fff; border: none; border-radius: 6px; font-size: 15px; cursor: pointer; margin-top: 15px; transition: background 0.2s; }
+        .btn:hover { background: #40a9ff; }
+        .btn:disabled { background: #ccc; cursor: not-allowed; }
+
+        .progress-section { display: none; }
+        .progress-bar-container { background: #e8e8e8; border-radius: 10px; height: 24px; overflow: hidden; margin: 15px 0; }
+        .progress-bar { background: linear-gradient(90deg, #52c41a, #73d13d); height: 100%; border-radius: 10px; transition: width 0.5s; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 12px; font-weight: bold; min-width: 40px; }
+
+        .status-text { color: #666; font-size: 14px; }
+        .status-text .label { font-weight: bold; color: #333; }
+
+        .download-links { display: none; margin-top: 20px; }
+        .download-links a { display: inline-block; padding: 10px 20px; background: #52c41a; color: #fff; text-decoration: none; border-radius: 6px; margin-right: 10px; transition: background 0.2s; }
+        .download-links a:hover { background: #73d13d; }
+        .download-links a.excluded { background: #ff4d4f; }
+        .download-links a.excluded:hover { background: #ff7875; }
+
+        .error-msg { color: #ff4d4f; font-size: 14px; margin-top: 10px; display: none; }
+
+        .model-select-row { display: flex; align-items: center; gap: 10px; margin-top: 15px; }
+        .model-select-row label { font-size: 14px; color: #666; font-weight: 600; }
+        .model-select-row select { padding: 6px 12px; border: 1px solid #d9d9d9; border-radius: 6px; font-size: 14px; background: #fff; cursor: pointer; }
+
+        .history-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        .history-table th, .history-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #e8e8e8; font-size: 14px; }
+        .history-table th { background: #fafafa; color: #333; font-weight: 600; }
+        .history-table tr:hover { background: #f5f5f5; }
+        .pagination { display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 15px; }
+        .pagination button { padding: 6px 14px; border: 1px solid #d9d9d9; background: #fff; border-radius: 4px; cursor: pointer; }
+        .pagination button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .pagination span { color: #666; font-size: 14px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>蓝海词筛选系统</h1>
+    <div class="nav-bar">
+        <a href="/index.html" class="active">蓝海词筛选</a>
+        <a href="/chat.html">AI 对话</a>
+        <a href="/trend.html">趋势词挖掘</a>
+    </div>
+
+    <!-- Upload Card -->
+    <div class="card">
+        <h2>上传蓝海词 Excel 文件</h2>
+        <div class="upload-area" id="uploadArea">
+            <p>点击或拖拽上传 .xlsx 文件</p>
+            <span class="hint">第一行将自动跳过（说明/表头行）</span>
+        </div>
+        <input type="file" id="fileInput" accept=".xlsx">
+        <div id="fileName" style="margin-top: 10px; color: #333; font-weight: bold;"></div>
+        <div class="model-select-row">
+            <label>模型：</label>
+            <select id="modelSelect">
+                <option value="qwen3.6-plus">qwen3.6-plus</option>
+                <option value="qwen3.6-flash">qwen3.6-flash</option>
+                <option value="deepseek-v4-flash">deepseek-v4-flash</option>
+            </select>
+            <label style="display:flex;align-items:center;gap:4px;margin-left:auto;cursor:pointer;">
+                <input type="checkbox" id="enableSearch"> 联网搜索
+            </label>
+        </div>
+        <button class="btn" id="uploadBtn" disabled>开始筛选</button>
+        <div class="error-msg" id="errorMsg"></div>
+    </div>
+
+    <!-- Progress Card -->
+    <div class="card progress-section" id="progressSection">
+        <h2>处理进度</h2>
+        <div class="status-text">
+            <span class="label">状态：</span><span id="taskStatus">处理中...</span>
+        </div>
+        <div class="progress-bar-container">
+            <div class="progress-bar" id="progressBar" style="width: 0%;">0%</div>
+        </div>
+        <div class="status-text">
+            <span class="label">已处理：</span><span id="processedWords">0</span> / <span id="totalWords">0</span> 个词
+        </div>
+        <div class="download-links" id="downloadLinks">
+            <a id="downloadKept" href="#">下载合规蓝海词</a>
+            <a id="downloadExcluded" href="#" class="excluded">下载剔除词</a>
+        </div>
+    </div>
+
+    <!-- History Card -->
+    <div class="card">
+        <h2>历史词库</h2>
+        <table class="history-table">
+            <thead>
+                <tr><th>关键词</th><th>状态</th><th>次数</th><th>原因</th><th>时间</th></tr>
+            </thead>
+            <tbody id="historyBody"></tbody>
+        </table>
+        <div class="pagination" id="pagination"></div>
+    </div>
+</div>
+
+<script>
+    const uploadArea = document.getElementById('uploadArea');
+    const fileInput = document.getElementById('fileInput');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const fileNameDiv = document.getElementById('fileName');
+    const errorMsg = document.getElementById('errorMsg');
+    const progressSection = document.getElementById('progressSection');
+    const progressBar = document.getElementById('progressBar');
+    const taskStatus = document.getElementById('taskStatus');
+    const processedWords = document.getElementById('processedWords');
+    const totalWords = document.getElementById('totalWords');
+    const downloadLinks = document.getElementById('downloadLinks');
+    const downloadKept = document.getElementById('downloadKept');
+    const downloadExcluded = document.getElementById('downloadExcluded');
+    const modelSelect = document.getElementById('modelSelect');
+
+    let selectedFile = null;
+    let currentTaskId = null;
+    let pollTimer = null;
+    let seconds = 0;
+    let timerInterval = null;
+
+    // Upload area click
+    uploadArea.addEventListener('click', () => fileInput.click());
+
+    // Drag and drop
+    uploadArea.addEventListener('dragover', e => { e.preventDefault(); uploadArea.classList.add('dragover'); });
+    uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
+    uploadArea.addEventListener('drop', e => {
+        e.preventDefault();
+        uploadArea.classList.remove('dragover');
+        if (e.dataTransfer.files.length > 0) {
+            handleFile(e.dataTransfer.files[0]);
+        }
+    });
+
+    fileInput.addEventListener('change', () => {
+        if (fileInput.files.length > 0) handleFile(fileInput.files[0]);
+    });
+
+    function handleFile(file) {
+        if (!file.name.endsWith('.xlsx')) {
+            showError('请上传 .xlsx 格式的文件');
+            return;
+        }
+        selectedFile = file;
+        fileNameDiv.textContent = '已选择: ' + file.name;
+        uploadBtn.disabled = false;
+        errorMsg.style.display = 'none';
+    }
+
+    function showError(msg) {
+        errorMsg.textContent = msg;
+        errorMsg.style.display = 'block';
+    }
+
+    // Upload and start processing
+    uploadBtn.addEventListener('click', async () => {
+        if (uploadBtn.textContent === '停止') {
+            stopProcessing();
+            return;
+        }
+        if (!selectedFile) return;
+        uploadBtn.textContent = '上传中...';
+        errorMsg.style.display = 'none';
+
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+        formData.append('model', modelSelect.value);
+        formData.append('enableSearch', document.getElementById('enableSearch').checked);
+
+        try {
+            const resp = await fetch('/api/filter/upload', { method: 'POST', body: formData });
+            const data = await resp.json();
+
+            if (data.error) {
+                showError(data.error);
+                uploadBtn.textContent = '开始筛选';
+                return;
+            }
+
+            currentTaskId = data.taskId;
+            progressSection.style.display = 'block';
+            uploadBtn.textContent = '停止';
+
+            // 读秒计时
+            seconds = 0;
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                seconds++;
+                taskStatus.textContent = `已等待 ${seconds} 秒...`;
+            }, 1000);
+
+            // Start polling
+            pollStatus();
+        } catch (e) {
+            showError('上传失败：' + e.message);
+            uploadBtn.textContent = '开始筛选';
+        }
+    });
+
+    function stopProcessing() {
+        if (pollTimer) clearInterval(pollTimer);
+        if (timerInterval) clearInterval(timerInterval);
+        pollTimer = null;
+        timerInterval = null;
+        currentTaskId = null;
+        uploadBtn.textContent = '开始筛选';
+        uploadBtn.disabled = false;
+        taskStatus.textContent = '已取消';
+        taskStatus.style.color = '#ff9800';
+    }
+
+    function pollStatus() {
+        if (pollTimer) clearInterval(pollTimer);
+        pollTimer = setInterval(async () => {
+            try {
+                const resp = await fetch(`/api/filter/status/${currentTaskId}`);
+                const data = await resp.json();
+
+                processedWords.textContent = data.processedWords || 0;
+                totalWords.textContent = data.totalWords || 0;
+
+                if (data.totalWords > 0) {
+                    const pct = Math.round((data.processedWords / data.totalWords) * 100);
+                    progressBar.style.width = pct + '%';
+                    progressBar.textContent = pct + '%';
+                }
+
+                if (data.status === 'COMPLETED') {
+                    clearInterval(pollTimer);
+                    if (timerInterval) clearInterval(timerInterval);
+                    pollTimer = null;
+                    timerInterval = null;
+                    taskStatus.textContent = `处理完成！耗时 ${seconds} 秒`;
+                    downloadKept.href = `/api/filter/download/${currentTaskId}/kept`;
+                    downloadExcluded.href = `/api/filter/download/${currentTaskId}/excluded`;
+                    downloadLinks.style.display = 'block';
+                    uploadBtn.textContent = '开始筛选';
+                    uploadBtn.disabled = false;
+                    loadHistory();
+                } else if (data.status === 'FAILED') {
+                    clearInterval(pollTimer);
+                    if (timerInterval) clearInterval(timerInterval);
+                    pollTimer = null;
+                    timerInterval = null;
+                    taskStatus.textContent = '处理失败';
+                    taskStatus.style.color = '#ff4d4f';
+                    uploadBtn.textContent = '开始筛选';
+                    uploadBtn.disabled = false;
+                }
+            } catch (e) {
+                // Ignore polling errors
+            }
+        }, 2000);
+    }
+
+    // Load history
+    let currentPage = 1;
+    async function loadHistory(page = 1) {
+        try {
+            const resp = await fetch(`/api/filter/history?page=${page}&size=10`);
+            const data = await resp.json();
+
+            const tbody = document.getElementById('historyBody');
+            tbody.innerHTML = '';
+            data.records.forEach(r => {
+                const tr = document.createElement('tr');
+                const timeStr = r.createTime ? r.createTime.replace('T', ' ').substring(0, 19) : '';
+                const statusStyle = r.status === '合规' ? 'color:#52c41a' : r.status === '数据重复' ? 'color:#999' : 'color:#ff4d4f';
+                tr.innerHTML = `<td>${r.word}</td><td style="${statusStyle}">${r.status || '-'}</td><td>${r.usageCount || 1}</td><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.reason || ''}">${r.reason || '-'}</td><td>${timeStr}</td>`;
+                tbody.appendChild(tr);
+            });
+
+            const pagDiv = document.getElementById('pagination');
+            const totalPages = Math.ceil(data.total / data.size);
+            pagDiv.innerHTML = `
+                <button ${page <= 1 ? 'disabled' : ''} onclick="loadHistory(${page - 1})">上一页</button>
+                <span>第 ${page} 页，共 ${totalPages || 1} 页（总计 ${data.total} 条）</span>
+                <button ${page >= totalPages ? 'disabled' : ''} onclick="loadHistory(${page + 1})">下一页</button>
+            `;
+        } catch (e) {
+            // Ignore
+        }
+    }
+
+    loadHistory(1);
+</script>
+</body>
+</html>

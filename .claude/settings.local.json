@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mvn compile *)",
+      "Bash(mvn clean *)",
+      "mcp__ide__getDiagnostics",
+      "Bash(bash mvnw *)",
+      "Bash(curl -s \"http://localhost:8080/api/filter/history?page=1&size=1\")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(f'Total records: {d[\\\\\"total\\\\\"]}'\\)\")"
+    ]
+  }
+}

@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>趋势词挖掘</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+        .container { max-width: 800px; margin: 0 auto; }
+        .nav-bar { display: flex; gap: 12px; margin-bottom: 24px; justify-content: center; }
+        .nav-bar a { padding: 10px 24px; background: rgba(255,255,255,0.9); color: #667eea; border: 2px solid rgba(255,255,255,0.5); border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 600; transition: all 0.2s; }
+        .nav-bar a:hover { background: #667eea; color: #fff; }
+        .nav-bar a.active { background: #667eea; color: #fff; }
+        .card {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+            padding: 32px;
+            margin-bottom: 24px;
+        }
+        h1 {
+            font-size: 24px;
+            color: #1a1a2e;
+            margin-bottom: 8px;
+        }
+        .subtitle { color: #666; font-size: 14px; margin-bottom: 24px; text-align: center; }
+        label {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+        }
+        textarea {
+            width: 100%;
+            min-height: 150px;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: inherit;
+            resize: vertical;
+            transition: border-color 0.2s;
+        }
+        textarea:focus { outline: none; border-color: #667eea; }
+        .row { display: flex; gap: 12px; align-items: flex-end; margin-top: 16px; }
+        .row > div { flex: 1; }
+        select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            background: white;
+            cursor: pointer;
+        }
+        .btn {
+            padding: 10px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+        .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(102,126,234,0.4); }
+        .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; transform: none; box-shadow: none; }
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+        .btn-secondary:hover { background: #e0e0e0; }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            text-align: center;
+            padding: 16px;
+            border-radius: 8px;
+        }
+        .stat-card.total { background: #e8f5e9; }
+        .stat-card.new { background: #e3f2fd; }
+        .stat-card.dup { background: #fff3e0; }
+        .stat-value { font-size: 28px; font-weight: 700; color: #1a1a2e; }
+        .stat-label { font-size: 12px; color: #666; margin-top: 4px; }
+
+        .word-list {
+            width: 100%;
+            max-height: 500px;
+            padding: 12px;
+            background: #fafafa;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            line-height: 1.8;
+            color: #333;
+            resize: vertical;
+            font-family: inherit;
+        }
+        .word-list:focus { outline: none; border-color: #667eea; }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        .spinner {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            border: 3px solid #e0e0e0;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 8px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .error { color: #d32f2f; background: #ffebee; padding: 12px; border-radius: 8px; margin-top: 16px; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="nav-bar">
+            <a href="/index.html">蓝海词筛选</a>
+            <a href="/chat.html">AI 对话</a>
+            <a href="/trend.html" class="active">趋势词挖掘</a>
+        </div>
+        <div class="card">
+            <h1>趋势词挖掘</h1>
+            <p class="subtitle">输入系统提示词，让大模型生成未来市场趋势关键词，自动与数据库去重并入库</p>
+
+            <label for="systemPrompt">系统提示词</label>
+            <textarea id="systemPrompt" placeholder="例如：请分析当前电商市场趋势，生成50个未来3个月有潜力的蓝海关键词，每行一个词"></textarea>
+
+            <div class="row">
+                <div>
+                    <label>模型</label>
+                    <select id="model">
+                        <option value="qwen3.6-plus">qwen3.6-plus</option>
+                        <option value="qwen3.6-flash">qwen3.6-flash</option>
+                        <option value="deepseek-v4-flash">deepseek-v4-flash</option>
+                        <option value="qwen3-max">qwen3-max</option>
+                        <option value="qwen-plus">qwen-plus</option>
+                        <option value="qwen-turbo">qwen-turbo</option>
+                    </select>
+                </div>
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <label style="font-size:14px;color:#666;white-space:nowrap;">词数：</label>
+                    <input type="number" id="wordCountMin" value="50" min="10" max="200" style="width:65px;padding:6px 8px;border:2px solid #e0e0e0;border-radius:8px;font-size:14px;">
+                    <span style="color:#999;">-</span>
+                    <input type="number" id="wordCountMax" placeholder="可选" min="10" max="200" style="width:75px;padding:6px 8px;border:2px solid #e0e0e0;border-radius:8px;font-size:14px;">
+                </div>
+                <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:14px;color:#666;white-space:nowrap;">
+                    <input type="checkbox" id="enableSearch" checked> 联网搜索
+                </label>
+                <button class="btn btn-primary" id="mineBtn" onclick="startMining()">开始挖掘</button>
+                <button class="btn btn-secondary" onclick="loadDefault()">加载默认提示词</button>
+            </div>
+        </div>
+
+        <div id="loadingCard" class="card hidden">
+            <div class="loading">
+                <div class="spinner"></div>
+                <div>AI 正在生成趋势词，请稍候...</div>
+            </div>
+        </div>
+
+        <div id="errorCard" class="error hidden"></div>
+
+        <div id="resultCard" class="card hidden">
+            <div class="stats">
+                <div class="stat-card total">
+                    <div class="stat-value" id="totalCount">0</div>
+                    <div class="stat-label">总词数</div>
+                </div>
+                <div class="stat-card new">
+                    <div class="stat-value" id="newCount">0</div>
+                    <div class="stat-label">新增</div>
+                </div>
+                <div class="stat-card dup">
+                    <div class="stat-value" id="dupCount">0</div>
+                    <div class="stat-label">已存在</div>
+                </div>
+            </div>
+
+            <textarea id="wordListContainer" class="word-list" readonly rows="15"></textarea>
+        </div>
+    </div>
+
+    <script>
+        const DEFAULT_PROMPT = `你是一名电商市场趋势分析师，专注挖掘未来1个月内即将爆发增长的蓝海关键词。
+
+【时间要求】
+- 只生成未来1个月内有明显上升趋势的关键词，不要长期趋势词
+- 优先考虑季节性临近节点、近期热门事件带动、短期爆款潜力的商品
+
+【生成规则】
+1. 必须是具体的实物商品关键词，消费者能直接搜索和购买的
+2. 每个词应该包含明确的产品形态或用途，不能太宽泛也不能太具体到品牌型号
+3. 不能包含品牌名、店铺名、个人昵称
+4. 不能是虚拟产品（账号/会员/充值/脚本/优惠券/激活码等）
+5. 不能是食品本体、化妆品本体、服饰鞋包本体
+6. 不能是管制危险品、活体生物、农药杀虫剂
+7. 不能是单价明显5元以下的低价小商品
+8. 不能是无意义的词组或生造词，必须是真实存在的商品名称
+
+【推荐方向】
+结合当前季节、节日、近期热点，以及网上爆款产品：
+- 短视频平台（抖音/快手/小红书）正在起量的新品爆款
+- 电商平台（淘宝/拼多多）近期飙升榜/热搜词商品
+- 社交平台热议带动的网红同款、话题衍生商品
+- 季节性商品（换季收纳、应季户外用品、节日装饰）
+- 日常消耗品的细分替代品（收纳整理、厨房小工具、车载配件、宠物用品、园艺工具等）
+
+【输出要求】
+- 生成50到100个词
+- 每行一个词，不要编号，不要解释
+- 不要任何JSON格式，只要纯文本
+- 不要重复词
+- 不要客套话，直接输出词列表`;
+
+        let allWords = [];
+        let newWords = [];
+        let dupWords = [];
+        let abortController = null;
+
+        // 输入框 → 提示词
+        function syncPromptFromInputs() {
+            const textarea = document.getElementById('systemPrompt');
+            const minVal = document.getElementById('wordCountMin').value;
+            const maxVal = document.getElementById('wordCountMax').value;
+            const newRule = maxVal ? `生成${minVal}到${maxVal}个词` : `生成${minVal}个词`;
+            textarea.value = textarea.value.replace(/生成\d+(到\d+)?个词/, newRule);
+        }
+
+        // 提示词 → 输入框
+        function syncInputsFromPrompt() {
+            const textarea = document.getElementById('systemPrompt');
+            const match = textarea.value.match(/生成(\d+)(到(\d+))?个词/);
+            if (match) {
+                document.getElementById('wordCountMin').value = match[1];
+                if (match[3]) {
+                    document.getElementById('wordCountMax').value = match[3];
+                }
+            }
+        }
+
+        async function loadDefault() {
+            try {
+                const resp = await fetch('/api/filter/trend/prompt');
+                const data = await resp.json();
+                if (data.prompt) {
+                    document.getElementById('systemPrompt').value = data.prompt;
+                    // 从提示词中提取数字填充输入框
+                    syncInputsFromPrompt();
+                }
+            } catch (e) {
+                document.getElementById('systemPrompt').value = '加载默认提示词失败';
+            }
+        }
+
+        // 页面加载时自动填入默认提示词
+        loadDefault();
+
+        // 输入框变化 → 更新提示词
+        document.getElementById('wordCountMin').addEventListener('input', syncPromptFromInputs);
+        document.getElementById('wordCountMax').addEventListener('input', syncPromptFromInputs);
+
+        // 提示词变化（用户手动编辑）→ 更新输入框
+        document.getElementById('systemPrompt').addEventListener('input', syncInputsFromPrompt);
+
+        async function startMining() {
+            const systemPrompt = document.getElementById('systemPrompt').value.trim();
+            if (!systemPrompt) {
+                showError('系统提示词不能为空');
+                return;
+            }
+
+            const model = document.getElementById('model').value;
+            const mineBtn = document.getElementById('mineBtn');
+
+            abortController = new AbortController();
+            mineBtn.disabled = false;
+            mineBtn.textContent = '停止';
+            mineBtn.onclick = stopMining;
+            showLoading(true);
+            hideError();
+            document.getElementById('resultCard').classList.add('hidden');
+
+            // 读秒计时
+            let seconds = 0;
+            const timer = setInterval(() => {
+                seconds++;
+                document.querySelector('.loading div:last-child').textContent =
+                    `AI 正在生成趋势词，已等待 ${seconds} 秒...`;
+            }, 1000);
+
+            try {
+                const response = await fetch('/api/filter/trend/mine', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ systemPrompt, model, enableSearch: document.getElementById('enableSearch').checked }),
+                    signal: abortController.signal
+                });
+
+                const data = await response.json();
+                if (!response.ok) {
+                    showError(data.error || '请求失败');
+                    return;
+                }
+
+                newWords = (data.newWords || []).map(w => w.word);
+                allWords = (data.newWords || []).map(w => w.word);
+                dupWords = [];
+                const existingCount = data.existingCount || 0;
+
+                document.getElementById('totalCount').textContent = data.total;
+                document.getElementById('newCount').textContent = data.newCount;
+                document.getElementById('dupCount').textContent = existingCount;
+
+                document.getElementById('resultCard').classList.remove('hidden');
+                renderWords(data.newWords);
+
+            } catch (e) {
+                if (e.name === 'AbortError') {
+                    showError('已取消请求');
+                } else {
+                    showError('网络错误: ' + e.message);
+                }
+            } finally {
+                clearInterval(timer);
+                mineBtn.disabled = false;
+                mineBtn.textContent = '开始挖掘';
+                mineBtn.onclick = startMining;
+                abortController = null;
+                showLoading(false);
+            }
+        }
+
+        function stopMining() {
+            if (abortController) {
+                abortController.abort();
+            }
+        }
+
+        function renderWords(wordList) {
+            const container = document.getElementById('wordListContainer');
+
+            if (!wordList || wordList.length === 0) {
+                container.value = '';
+                container.placeholder = '暂无新词';
+                container.readOnly = true;
+                return;
+            }
+
+            const lines = wordList.map(w => {
+                const count = w.usageCount > 1 ? ` (${w.usageCount})` : '';
+                return w.word + count;
+            });
+            container.value = lines.join('\n');
+            container.readOnly = false;
+            container.focus();
+        }
+
+        function showLoading(show) {
+            document.getElementById('loadingCard').classList.toggle('hidden', !show);
+        }
+
+        function showError(msg) {
+            const el = document.getElementById('errorCard');
+            el.textContent = msg;
+            el.classList.remove('hidden');
+        }
+
+        function hideError() {
+            document.getElementById('errorCard').classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
