@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenClaw 监控 - 蓝海词筛选系统</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; min-height: 100vh; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 40px 20px; }
+        h1 { text-align: center; color: #1a1a2e; margin-bottom: 30px; font-size: 28px; }
+
+        .nav-bar { display: flex; gap: 12px; margin-bottom: 30px; justify-content: center; }
+        .nav-bar a { padding: 10px 24px; background: #fff; color: #1890ff; border: 2px solid #1890ff; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 600; transition: all 0.2s; }
+        .nav-bar a:hover { background: #1890ff; color: #fff; }
+        .nav-bar a.active { background: #1890ff; color: #fff; }
+
+        .card { background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); padding: 24px; margin-bottom: 20px; }
+        .card h2 { font-size: 18px; color: #333; margin-bottom: 15px; border-bottom: 2px solid #e8e8e8; padding-bottom: 10px; }
+
+        .status-bar { display: flex; align-items: center; gap: 16px; padding: 16px; background: #fafafa; border-radius: 8px; margin-bottom: 20px; }
+        .status-dot { width: 12px; height: 12px; border-radius: 50%; }
+        .status-dot.running { background: #52c41a; box-shadow: 0 0 8px rgba(82,196,26,0.6); }
+        .status-dot.stopped { background: #ff4d4f; }
+        .status-text { font-size: 15px; font-weight: 600; }
+        .status-text.running { color: #52c41a; }
+        .status-text.stopped { color: #ff4d4f; }
+        .pid-info { font-size: 13px; color: #999; margin-left: auto; }
+
+        .btn-group { display: flex; gap: 10px; }
+        .btn { padding: 10px 28px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; color: #fff; }
+        .btn:hover { opacity: 0.85; transform: translateY(-1px); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .btn-start { background: #52c41a; }
+        .btn-stop { background: #ff4d4f; }
+
+        .cmd-log { margin-top: 15px; background: #1e1e1e; border-radius: 8px; padding: 12px 16px; max-height: 200px; overflow-y: auto; font-family: 'Consolas', 'Courier New', monospace; font-size: 12px; line-height: 1.6; }
+        .cmd-log::-webkit-scrollbar { width: 6px; }
+        .cmd-log::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
+        .cmd-line { color: #888; }
+        .cmd-line .cmd { color: #56b6c2; }
+        .cmd-line .ok { color: #98c379; }
+        .cmd-line .err { color: #e06c75; }
+        .cmd-line .info { color: #61afef; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>OpenClaw 监控</h1>
+    <div class="nav-bar">
+        <a href="/index.html">蓝海词筛选</a>
+        <a href="/chat.html">AI 对话</a>
+        <a href="/trend.html">趋势词挖掘</a>
+        <a href="/file-manager.html">文件管理</a>
+        <a href="/openclaw.html" class="active">OpenClaw</a>
+    </div>
+
+    <div class="card">
+        <h2>运行状态</h2>
+        <div class="status-bar">
+            <div class="status-dot stopped" id="statusDot"></div>
+            <span class="status-text stopped" id="statusText">未运行</span>
+            <span class="pid-info" id="pidInfo"></span>
+        </div>
+        <div class="btn-group">
+            <button class="btn btn-start" id="startBtn" onclick="startOpenClaw()">启动 OpenClaw</button>
+            <button class="btn btn-stop" id="stopBtn" onclick="stopOpenClaw()" disabled>停止 OpenClaw</button>
+        </div>
+        <div class="cmd-log" id="cmdLog">
+            <div class="cmd-line"><span class="info">等待操作...</span></div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>OpenClaw 界面</h2>
+        <div style="text-align:center; padding:30px 0;">
+            <button class="btn btn-start" onclick="window.open('http://localhost:18789/chat?session=main','_blank')">在新标签页打开 OpenClaw</button>
+            <p style="margin-top:12px;color:#999;font-size:13px;">由于浏览器安全限制，OpenClaw 页面将在新标签页中打开</p>
+        </div>
+    </div>
+</div>
+
+<script>
+    const cmdLog = document.getElementById('cmdLog');
+
+    function addCmd(cmd, status) {
+        const time = new Date().toLocaleTimeString();
+        const cls = status === 'error' ? 'err' : 'ok';
+        const icon = status === 'error' ? '✗' : '✓';
+        cmdLog.innerHTML += `<div class="cmd-line">[${time}] <span class="cmd">${cmd}</span> <span class="${cls}">${icon} ${status}</span></div>`;
+        cmdLog.scrollTop = cmdLog.scrollHeight;
+    }
+
+    async function checkStatus() {
+        try {
+            const resp = await fetch('/api/openclaw/status');
+            const data = await resp.json();
+
+            const dot = document.getElementById('statusDot');
+            const text = document.getElementById('statusText');
+            const startBtn = document.getElementById('startBtn');
+            const stopBtn = document.getElementById('stopBtn');
+            const pidInfo = document.getElementById('pidInfo');
+
+            if (data.running) {
+                dot.className = 'status-dot running';
+                text.className = 'status-text running';
+                text.textContent = '运行中';
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+                pidInfo.textContent = `PID: ${data.pid || '-'}`;
+            } else {
+                dot.className = 'status-dot stopped';
+                text.className = 'status-text stopped';
+                text.textContent = '未运行';
+                startBtn.disabled = false;
+                stopBtn.disabled = true;
+                pidInfo.textContent = '';
+            }
+
+            // Display server-side log output (WSL console errors, etc.)
+            if (data.log && data.log.trim()) {
+                const lines = data.log.trim().split('\n');
+                let html = '';
+                lines.forEach(line => {
+                    const cls = line.includes('[系统]') ? 'info' : line.includes('ERROR') || line.includes('ERROR:') || line.includes('failed') ? 'err' : 'ok';
+                    html += `<div class="cmd-line">${escHtml(line)}</div>`;
+                });
+                cmdLog.innerHTML = html;
+                cmdLog.scrollTop = cmdLog.scrollHeight;
+            }
+        } catch (e) {}
+    }
+
+    function escHtml(s) {
+        return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    async function startOpenClaw() {
+        addCmd('wsl openclaw gateway run --allow-unconfigured', '执行中...');
+        const startBtn = document.getElementById('startBtn');
+        startBtn.disabled = true;
+        startBtn.textContent = '启动中...';
+
+        const resp = await fetch('/api/openclaw/start', { method: 'POST' });
+        const data = await resp.json();
+
+        if (data.error) {
+            addCmd('wsl openclaw gateway run --allow-unconfigured', 'error: ' + data.error);
+        } else {
+            addCmd('wsl openclaw gateway run --allow-unconfigured', 'success: 已启动');
+        }
+        startBtn.textContent = '启动 OpenClaw';
+        checkStatus();
+    }
+
+    async function stopOpenClaw() {
+        addCmd('wsl openclaw gateway stop', '执行中...');
+        const stopBtn = document.getElementById('stopBtn');
+        stopBtn.disabled = true;
+        stopBtn.textContent = '停止中...';
+
+        const resp = await fetch('/api/openclaw/stop', { method: 'POST' });
+        const data = await resp.json();
+
+        if (data.error) {
+            addCmd('wsl openclaw gateway stop', 'error: ' + data.error);
+        } else {
+            addCmd('wsl openclaw gateway stop', 'success: 已停止');
+        }
+        stopBtn.textContent = '停止 OpenClaw';
+        checkStatus();
+    }
+
+    setInterval(checkStatus, 2000);
+    checkStatus();
+</script>
+</body>
+</html>

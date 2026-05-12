@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>1688 商品采集器</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #ff6a00, #ee0979); color: #fff; padding: 24px; border-radius: 12px; margin-bottom: 24px; }
+        .header h1 { font-size: 24px; margin-bottom: 8px; }
+        .header p { opacity: 0.9; font-size: 14px; }
+
+        .input-section { background: #fff; padding: 24px; border-radius: 12px; margin-bottom: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+        .input-row { display: flex; gap: 12px; }
+        .input-row input { flex: 1; padding: 12px 16px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 14px; outline: none; transition: border-color 0.2s; }
+        .input-row input:focus { border-color: #ff6a00; }
+        .btn { padding: 12px 24px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+        .btn-primary { background: #ff6a00; color: #fff; }
+        .btn-primary:hover { background: #e55d00; }
+        .btn-primary:disabled { background: #ccc; cursor: not-allowed; }
+        .btn-batch { background: #4a90d9; color: #fff; margin-top: 12px; }
+        .btn-batch:hover { background: #3a7fc8; }
+        .btn-batch:disabled { background: #ccc; cursor: not-allowed; }
+
+        .status-bar { background: #fff; padding: 16px 24px; border-radius: 12px; margin-bottom: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); display: flex; align-items: center; gap: 16px; }
+        .status-bar.hidden { display: none; }
+        .spinner { width: 20px; height: 20px; border: 3px solid #e0e0e0; border-top-color: #ff6a00; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .status-text { flex: 1; font-size: 14px; }
+        .status-progress { font-size: 13px; color: #666; }
+
+        .product-card { background: #fff; border-radius: 12px; margin-bottom: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow: hidden; }
+        .product-info { padding: 24px; border-bottom: 1px solid #f0f0f0; }
+        .product-title { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+        .product-meta { display: flex; gap: 16px; font-size: 13px; color: #666; }
+        .product-meta span { background: #f5f5f5; padding: 4px 10px; border-radius: 4px; }
+
+        .section { padding: 24px; }
+        .section-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+        .section-title .badge { background: #ff6a00; color: #fff; font-size: 12px; padding: 2px 8px; border-radius: 10px; }
+
+        .image-grid { display: flex; flex-wrap: wrap; gap: 12px; }
+        .image-grid img { width: 120px; height: 120px; object-fit: cover; border-radius: 8px; border: 1px solid #e0e0e0; cursor: pointer; transition: transform 0.2s; }
+        .image-grid img:hover { transform: scale(1.05); }
+
+        .sku-table { width: 100%; border-collapse: collapse; }
+        .sku-table th, .sku-table td { padding: 12px 16px; text-align: left; border-bottom: 1px solid #f0f0f0; font-size: 14px; }
+        .sku-table th { background: #fafafa; font-weight: 600; }
+        .sku-table tr:hover { background: #fafafa; }
+        .sku-img { width: 40px; height: 40px; object-fit: cover; border-radius: 4px; }
+        .price { color: #ff6a00; font-weight: 600; }
+        .original-price { color: #999; text-decoration: line-through; font-size: 12px; }
+
+        .empty-state { text-align: center; padding: 60px 20px; color: #999; }
+        .empty-state svg { width: 64px; height: 64px; margin-bottom: 16px; opacity: 0.3; }
+
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: none; align-items: center; justify-content: center; z-index: 1000; cursor: pointer; }
+        .modal.active { display: flex; }
+        .modal img { max-width: 90%; max-height: 90%; border-radius: 8px; }
+
+        .log-section { background: #1e1e1e; color: #d4d4d4; padding: 16px 24px; border-radius: 12px; margin-bottom: 24px; max-height: 200px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 12px; }
+        .log-section.hidden { display: none; }
+
+        .error-section { background: #fff2f0; border: 1px solid #ffccc7; border-radius: 12px; padding: 20px 24px; margin-bottom: 24px; display: flex; align-items: center; gap: 16px; }
+        .error-section.hidden { display: none; }
+        .error-section .error-icon { width: 32px; height: 32px; background: #ff4d4f; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: bold; flex-shrink: 0; }
+        .error-section .error-message { color: #cf1322; font-size: 14px; line-height: 1.6; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>1688 商品采集器</h1>
+            <p>输入商品链接或批量抓取链接文件中的全部商品</p>
+        </div>
+
+        <div class="input-section">
+            <div class="input-row">
+                <input type="text" id="urlInput" placeholder="输入1688商品链接，例如: https://detail.1688.com/offer/748546257692.html">
+                <button class="btn btn-primary" id="scrapeBtn" onclick="scrapeSingle()">开始采集</button>
+            </div>
+            <button class="btn btn-batch" id="batchBtn" onclick="startBatch()">批量抓取全部商品</button>
+        </div>
+
+        <div class="status-bar hidden" id="statusBar">
+            <div class="spinner"></div>
+            <div>
+                <div class="status-text" id="statusText">正在抓取...</div>
+                <div class="status-progress" id="statusProgress"></div>
+            </div>
+        </div>
+
+        <div class="log-section hidden" id="logSection"></div>
+
+        <div class="error-section hidden" id="errorSection">
+            <div class="error-icon">!</div>
+            <div class="error-message" id="errorMessage"></div>
+        </div>
+
+        <div id="results"></div>
+    </div>
+
+    <div class="modal" id="imageModal" onclick="this.classList.remove('active')">
+        <img id="modalImage" src="" alt="">
+    </div>
+
+    <script>
+        let pollingTimer = null;
+
+        async function scrapeSingle() {
+            const url = document.getElementById('urlInput').value.trim();
+            if (!url) { alert('请输入商品链接'); return; }
+
+            hideError();
+            const btn = document.getElementById('scrapeBtn');
+            btn.disabled = true;
+            btn.textContent = '采集中...';
+            showStatus('正在抓取: ' + url);
+
+            try {
+                const resp = await fetch('/api/scraper/scrape?url=' + encodeURIComponent(url));
+                if (resp.ok) {
+                    const data = await resp.json();
+                    renderProduct(data);
+                } else {
+                    try {
+                        const data = await resp.json();
+                        showError(data.error || data.message || '抓取失败，请稍后重试');
+                    } catch {
+                        const text = await resp.text();
+                        showError(text || '抓取失败，请稍后重试');
+                    }
+                }
+            } catch (e) {
+                showError('请求失败: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '开始采集';
+                hideStatus();
+            }
+        }
+
+        async function startBatch() {
+            const btn = document.getElementById('batchBtn');
+            btn.disabled = true;
+            btn.textContent = '采集中...';
+            document.getElementById('results').innerHTML = '';
+            showStatus('启动批量采集任务...');
+
+            try {
+                await fetch('/api/scraper/start', { method: 'POST' });
+                startPolling();
+            } catch (e) {
+                alert('启动失败: ' + e.message);
+                btn.disabled = false;
+                btn.textContent = '批量抓取全部商品';
+            }
+        }
+
+        function startPolling() {
+            pollingTimer = setInterval(async () => {
+                try {
+                    const resp = await fetch('/api/scraper/status');
+                    const data = await resp.json();
+                    updateStatus(data);
+
+                    if (!data.running) {
+                        clearInterval(pollingTimer);
+                        document.getElementById('batchBtn').disabled = false;
+                        document.getElementById('batchBtn').textContent = '批量抓取全部商品';
+                        showStatus(data.message, true);
+                        hideStatusAfter(5000);
+                    }
+                } catch (e) {
+                    clearInterval(pollingTimer);
+                }
+            }, 2000);
+        }
+
+        function showStatus(text, done) {
+            const bar = document.getElementById('statusBar');
+            bar.classList.remove('hidden');
+            document.getElementById('statusText').textContent = text;
+            if (done) {
+                bar.querySelector('.spinner').style.display = 'none';
+            } else {
+                bar.querySelector('.spinner').style.display = 'block';
+            }
+        }
+
+        function hideStatus() {
+            document.getElementById('statusBar').classList.add('hidden');
+        }
+
+        function showError(msg) {
+            const el = document.getElementById('errorSection');
+            el.classList.remove('hidden');
+            document.getElementById('errorMessage').textContent = msg;
+        }
+
+        function hideError() {
+            document.getElementById('errorSection').classList.add('hidden');
+        }
+
+        function hideStatusAfter(ms) {
+            setTimeout(hideStatus, ms);
+        }
+
+        function updateStatus(data) {
+            document.getElementById('statusText').textContent = data.message;
+            document.getElementById('statusProgress').textContent = data.total > 0 ? `${data.processed} / ${data.total}` : '';
+        }
+
+        function renderProduct(product) {
+            const container = document.getElementById('results');
+            let html = '<div class="product-card">';
+
+            // Product info
+            html += '<div class="product-info">';
+            html += '<div class="product-title">' + escapeHtml(product.title || '未知商品') + '</div>';
+            html += '<div class="product-meta">';
+            if (product.categoryPath) html += '<span>类目: ' + escapeHtml(product.categoryPath) + '</span>';
+            if (product.layout) html += '<span>布局: ' + escapeHtml(product.layout) + '</span>';
+            html += '</div></div>';
+
+            // Main images
+            if (product.mainImages && product.mainImages.length > 0) {
+                html += '<div class="section">';
+                html += '<div class="section-title">主图 <span class="badge">' + product.mainImages.length + '</span></div>';
+                html += '<div class="image-grid">';
+                product.mainImages.forEach((img, i) => {
+                    html += '<img src="' + escapeHtml(img) + '" onclick="showModal(this.src)" title="主图_' + String(i+1).padStart(2,'0') + '">';
+                });
+                html += '</div></div>';
+            }
+
+            // Detail images
+            if (product.detailImages && product.detailImages.length > 0) {
+                html += '<div class="section">';
+                html += '<div class="section-title">详情图 <span class="badge">' + product.detailImages.length + '</span></div>';
+                html += '<div class="image-grid">';
+                product.detailImages.forEach((img, i) => {
+                    html += '<img src="' + escapeHtml(img) + '" onclick="showModal(this.src)" title="详情图_' + String(i+1).padStart(2,'0') + '">';
+                });
+                html += '</div></div>';
+            }
+
+            // SKU table
+            if (product.skus && product.skus.length > 0) {
+                html += '<div class="section">';
+                html += '<div class="section-title">SKU 信息 <span class="badge">' + product.skus.length + '</span></div>';
+                html += '<table class="sku-table">';
+
+                // 从第一个SKU提取字段名
+                let fieldNames = [];
+                if (product.skus.length > 0 && product.skus[0].detailFields) {
+                    const parts = product.skus[0].detailFields.split(', ');
+                    for (const p of parts) {
+                        const eqIdx = p.indexOf('=');
+                        if (eqIdx > 0) fieldNames.push(p.substring(0, eqIdx));
+                    }
+                }
+
+                // 表头
+                html += '<thead><tr><th>SKU图</th><th>规格名称</th>';
+                for (const fn of fieldNames) html += '<th>' + escapeHtml(fn) + '</th>';
+                html += '<th>批发价</th><th>最终价格</th><th>8折价</th><th>利润</th><th>库存</th></tr></thead>';
+
+                html += '<tbody>';
+                product.skus.forEach(sku => {
+                    html += '<tr>';
+                    html += '<td>' + (sku.imageUrl ? '<img class="sku-img" src="' + escapeHtml(sku.imageUrl) + '" onclick="showModal(this.src)">' : '-') + '</td>';
+                    html += '<td>' + escapeHtml(sku.specName || '-') + '</td>';
+                    // 字段值
+                    if (sku.detailFields) {
+                        const parts = sku.detailFields.split(', ');
+                        for (const p of parts) {
+                            const eqIdx = p.indexOf('=');
+                            html += '<td>' + escapeHtml(eqIdx > 0 ? p.substring(eqIdx + 1) : p) + '</td>';
+                        }
+                    } else {
+                        for (let i = 0; i < fieldNames.length; i++) html += '<td>-</td>';
+                    }
+                    const originalPrice = sku.originalPrice || 0;
+                    const finalPrice = sku.finalPrice || 0;
+                    const discountPrice = finalPrice * 0.8;
+                    const profit = discountPrice - originalPrice;
+                    html += '<td><span class="original-price">¥' + originalPrice.toFixed(2) + '</span></td>';
+                    html += '<td><span class="price">¥' + finalPrice.toFixed(2) + '</span></td>';
+                    html += '<td><span class="price">¥' + discountPrice.toFixed(2) + '</span></td>';
+                    html += '<td style="color:' + (profit >= 0 ? '#52c41a' : '#ff4d4f') + '">¥' + profit.toFixed(2) + '</td>';
+                    html += '<td>' + (sku.stock || 0) + '</td>';
+                    html += '</tr>';
+                });
+                html += '</tbody></table></div>';
+            }
+
+            html += '</div>';
+            container.insertAdjacentHTML('beforeend', html);
+        }
+
+        function showModal(src) {
+            document.getElementById('modalImage').src = src;
+            document.getElementById('imageModal').classList.add('active');
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+    </script>
+</body>
+</html>
