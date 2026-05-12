@@ -47,14 +47,6 @@
         .model-select-row label { font-size: 14px; color: #666; font-weight: 600; }
         .model-select-row select { padding: 6px 12px; border: 1px solid #d9d9d9; border-radius: 6px; font-size: 14px; background: #fff; cursor: pointer; }
 
-        .history-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-        .history-table th, .history-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #e8e8e8; font-size: 14px; }
-        .history-table th { background: #fafafa; color: #333; font-weight: 600; }
-        .history-table tr:hover { background: #f5f5f5; }
-        .pagination { display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 15px; }
-        .pagination button { padding: 6px 14px; border: 1px solid #d9d9d9; background: #fff; border-radius: 4px; cursor: pointer; }
-        .pagination button:disabled { opacity: 0.5; cursor: not-allowed; }
-        .pagination span { color: #666; font-size: 14px; }
     </style>
 </head>
 <body>
@@ -64,6 +56,8 @@
         <a href="/index.html" class="active">蓝海词筛选</a>
         <a href="/chat.html">AI 对话</a>
         <a href="/trend.html">趋势词挖掘</a>
+        <a href="/file-manager.html">文件管理</a>
+        <a href="/openclaw.html">OpenClaw</a>
     </div>
 
     <!-- Upload Card -->
@@ -107,18 +101,6 @@
             <a id="downloadExcluded" href="#" class="excluded">下载剔除词</a>
         </div>
     </div>
-
-    <!-- History Card -->
-    <div class="card">
-        <h2>历史词库</h2>
-        <table class="history-table">
-            <thead>
-                <tr><th>关键词</th><th>状态</th><th>次数</th><th>原因</th><th>时间</th></tr>
-            </thead>
-            <tbody id="historyBody"></tbody>
-        </table>
-        <div class="pagination" id="pagination"></div>
-    </div>
 </div>
 
 <script>
@@ -143,18 +125,14 @@
     let seconds = 0;
     let timerInterval = null;
 
-    // Upload area click
     uploadArea.addEventListener('click', () => fileInput.click());
 
-    // Drag and drop
     uploadArea.addEventListener('dragover', e => { e.preventDefault(); uploadArea.classList.add('dragover'); });
     uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
     uploadArea.addEventListener('drop', e => {
         e.preventDefault();
         uploadArea.classList.remove('dragover');
-        if (e.dataTransfer.files.length > 0) {
-            handleFile(e.dataTransfer.files[0]);
-        }
+        if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
     });
 
     fileInput.addEventListener('change', () => {
@@ -162,27 +140,17 @@
     });
 
     function handleFile(file) {
-        if (!file.name.endsWith('.xlsx')) {
-            showError('请上传 .xlsx 格式的文件');
-            return;
-        }
+        if (!file.name.endsWith('.xlsx')) { showError('请上传 .xlsx 格式的文件'); return; }
         selectedFile = file;
         fileNameDiv.textContent = '已选择: ' + file.name;
         uploadBtn.disabled = false;
         errorMsg.style.display = 'none';
     }
 
-    function showError(msg) {
-        errorMsg.textContent = msg;
-        errorMsg.style.display = 'block';
-    }
+    function showError(msg) { errorMsg.textContent = msg; errorMsg.style.display = 'block'; }
 
-    // Upload and start processing
     uploadBtn.addEventListener('click', async () => {
-        if (uploadBtn.textContent === '停止') {
-            stopProcessing();
-            return;
-        }
+        if (uploadBtn.textContent === '停止') { stopProcessing(); return; }
         if (!selectedFile) return;
         uploadBtn.textContent = '上传中...';
         errorMsg.style.display = 'none';
@@ -196,17 +164,12 @@
             const resp = await fetch('/api/filter/upload', { method: 'POST', body: formData });
             const data = await resp.json();
 
-            if (data.error) {
-                showError(data.error);
-                uploadBtn.textContent = '开始筛选';
-                return;
-            }
+            if (data.error) { showError(data.error); uploadBtn.textContent = '开始筛选'; return; }
 
             currentTaskId = data.taskId;
             progressSection.style.display = 'block';
             uploadBtn.textContent = '停止';
 
-            // 读秒计时
             seconds = 0;
             if (timerInterval) clearInterval(timerInterval);
             timerInterval = setInterval(() => {
@@ -214,7 +177,6 @@
                 taskStatus.textContent = `已等待 ${seconds} 秒...`;
             }, 1000);
 
-            // Start polling
             pollStatus();
         } catch (e) {
             showError('上传失败：' + e.message);
@@ -253,61 +215,25 @@
                 if (data.status === 'COMPLETED') {
                     clearInterval(pollTimer);
                     if (timerInterval) clearInterval(timerInterval);
-                    pollTimer = null;
-                    timerInterval = null;
+                    pollTimer = null; timerInterval = null;
                     taskStatus.textContent = `处理完成！耗时 ${seconds} 秒`;
                     downloadKept.href = `/api/filter/download/${currentTaskId}/kept`;
                     downloadExcluded.href = `/api/filter/download/${currentTaskId}/excluded`;
                     downloadLinks.style.display = 'block';
                     uploadBtn.textContent = '开始筛选';
                     uploadBtn.disabled = false;
-                    loadHistory();
                 } else if (data.status === 'FAILED') {
                     clearInterval(pollTimer);
                     if (timerInterval) clearInterval(timerInterval);
-                    pollTimer = null;
-                    timerInterval = null;
+                    pollTimer = null; timerInterval = null;
                     taskStatus.textContent = '处理失败';
                     taskStatus.style.color = '#ff4d4f';
                     uploadBtn.textContent = '开始筛选';
                     uploadBtn.disabled = false;
                 }
-            } catch (e) {
-                // Ignore polling errors
-            }
+            } catch (e) {}
         }, 2000);
     }
-
-    // Load history
-    let currentPage = 1;
-    async function loadHistory(page = 1) {
-        try {
-            const resp = await fetch(`/api/filter/history?page=${page}&size=10`);
-            const data = await resp.json();
-
-            const tbody = document.getElementById('historyBody');
-            tbody.innerHTML = '';
-            data.records.forEach(r => {
-                const tr = document.createElement('tr');
-                const timeStr = r.createTime ? r.createTime.replace('T', ' ').substring(0, 19) : '';
-                const statusStyle = r.status === '合规' ? 'color:#52c41a' : r.status === '数据重复' ? 'color:#999' : 'color:#ff4d4f';
-                tr.innerHTML = `<td>${r.word}</td><td style="${statusStyle}">${r.status || '-'}</td><td>${r.usageCount || 1}</td><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.reason || ''}">${r.reason || '-'}</td><td>${timeStr}</td>`;
-                tbody.appendChild(tr);
-            });
-
-            const pagDiv = document.getElementById('pagination');
-            const totalPages = Math.ceil(data.total / data.size);
-            pagDiv.innerHTML = `
-                <button ${page <= 1 ? 'disabled' : ''} onclick="loadHistory(${page - 1})">上一页</button>
-                <span>第 ${page} 页，共 ${totalPages || 1} 页（总计 ${data.total} 条）</span>
-                <button ${page >= totalPages ? 'disabled' : ''} onclick="loadHistory(${page + 1})">下一页</button>
-            `;
-        } catch (e) {
-            // Ignore
-        }
-    }
-
-    loadHistory(1);
 </script>
 </body>
 </html>

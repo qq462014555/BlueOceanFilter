@@ -131,6 +131,7 @@ public class KeywordProcessingService {
                     log.info("Processing batch {}/{} ({} words)", i + 1, batches.size(), batch.size());
 
                     List<KeywordResult> results = null;
+                    boolean batchSuccess = false;
                     for (int retry = 1; retry <= appProperties.getRetryTimes(); retry++) {
                         try {
                             results = dashScopeClient.filterBatchHttp(batch, model, enableSearch);
@@ -142,24 +143,37 @@ public class KeywordProcessingService {
                                     log.info("剔除: [{}] 原因: {}", r.getWord(), r.getReason());
                                 }
                             }
+                            batchSuccess = true;
                             break;
                         } catch (Exception e) {
                             log.warn("Batch {} retry {}: {}", i + 1, retry, e.getMessage());
                             if (retry == appProperties.getRetryTimes()) {
-                                log.error("Skipping batch {}, marking for manual review", i + 1);
+                                log.warn("Batch {} 批次重试全部失败，逐词重试", i + 1);
                                 results = new ArrayList<>();
                                 for (String w : batch) {
-                                    results.add(new KeywordResult(w, true, "API调用失败，待人工复查"));
+                                    KeywordResult wordResult = filterSingleWord(w, model, enableSearch);
+                                    results.add(wordResult);
+                                    Thread.sleep(appProperties.getSleepMs());
                                 }
+                                batchSuccess = true;
                             } else {
                                 Thread.sleep(2000L * retry);
                             }
                         }
                     }
+                    if (!batchSuccess) {
+                        log.error("Skipping batch {}, marking for manual review", i + 1);
+                        results = new ArrayList<>();
+                        for (String w : batch) {
+                            results.add(new KeywordResult(w, true, "API调用失败，待人工复查"));
+                        }
+                    }
 
                     aiResults.addAll(results);
-                    task.setProcessedWords(task.getProcessedWords() + batch.size());
-                    taskMapper.updateById(task);
+                    if (batchSuccess) {
+                        task.setProcessedWords(task.getProcessedWords() + batch.size());
+                        taskMapper.updateById(task);
+                    }
 
                     if (i < batches.size() - 1) {
                         Thread.sleep(appProperties.getSleepMs());
@@ -221,7 +235,7 @@ public class KeywordProcessingService {
 
             // Already duplicate words
             for (KeywordResult r : excluded) {
-                if (r.getReason().startsWith("数据重复")) {
+                if (r.getReason() != null && r.getReason().startsWith("数据重复")) {
                     KeywordHistory kh = new KeywordHistory();
                     kh.setWord(r.getWord());
                     kh.setStatus("数据重复");
@@ -249,8 +263,9 @@ public class KeywordProcessingService {
                 log.info("排除: [{}] 原因: {}", r.getWord(), r.getReason());
             }
 
-            String keptFileName = UUID.randomUUID().toString() + "_kept.xlsx";
-            String excludedFileName = UUID.randomUUID().toString() + "_excluded.xlsx";
+            String dateStr = java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy_MM_dd"));
+            String keptFileName = dateStr + "符合蓝海词.xlsx";
+            String excludedFileName = dateStr + "剔除蓝海词.xlsx";
             String keptPath = appProperties.getOutputDir() + "/" + keptFileName;
             String excludedPath = appProperties.getOutputDir() + "/" + excludedFileName;
 
@@ -277,6 +292,25 @@ public class KeywordProcessingService {
                 try { Files.deleteIfExists(tempFile); } catch (IOException ignored) {}
             }
         }
+    }
+
+    private KeywordResult filterSingleWord(String word, String model, boolean enableSearch) {
+        for (int retry = 1; retry <= appProperties.getRetryTimes(); retry++) {
+            try {
+                List<KeywordResult> results = dashScopeClient.filterBatchHttp(List.of(word), model, enableSearch);
+                if (!results.isEmpty()) {
+                    log.info("逐词重试成功: [{}]", word);
+                    return results.get(0);
+                }
+            } catch (Exception e) {
+                log.warn("逐词重试 [{}] {}/{}: {}", word, retry, appProperties.getRetryTimes(), e.getMessage());
+                if (retry < appProperties.getRetryTimes()) {
+                    try { Thread.sleep(2000L * retry); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+                }
+            }
+        }
+        log.warn("逐词重试全部失败: [{}]", word);
+        return new KeywordResult(word, true, "API调用失败，待人工复查");
     }
 
     private static <T> List<List<T>> partition(List<T> list, int size) {

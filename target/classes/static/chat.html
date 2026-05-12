@@ -115,35 +115,29 @@
 
     let loading = false;
     let chatAbortController = null;
+    let PROMPT_TEMPLATES = {};
 
-    // Prompt templates
-    const PROMPT_TEMPLATES = {
-        chat: '你是一个 helpful 的 AI 助手。请用简洁清晰的语言回答问题。',
-        filter: `你是专业的电商选品专家，负责严格筛选蓝海词。
+    // Load prompt templates from API
+    async function loadPromptTemplatesFromApi() {
+        try {
+            const [chatResp, filterResp] = await Promise.all([
+                fetch('/api/filter/prompts/system-prompt'),
+                fetch('/api/filter/prompts/system-prompt')
+            ]);
+            if (chatResp.ok) {
+                const chatData = await chatResp.json();
+                PROMPT_TEMPLATES.chat = '你是一个 helpful 的 AI 助手。请用简洁清晰的语言回答问题。';
+            }
+            if (filterResp.ok) {
+                const filterData = await filterResp.json();
+                PROMPT_TEMPLATES.filter = filterData.prompt;
+            }
+        } catch (e) {
+            PROMPT_TEMPLATES.chat = '你是一个 helpful 的 AI 助手。请用简洁清晰的语言回答问题。';
+        }
+    }
 
-【筛选规则】
-1. 剔除服饰鞋包本体：/定制/衣服/裙子/裤子/上衣/T恤/外套/大衣/羽绒服/卫衣/衬衫/内衣/睡衣/泳衣/婚纱/旗袍/汉服/演出服/舞蹈服/女鞋/男鞋/高跟鞋/凉鞋/拖鞋/靴子/运动鞋/手提包/背包/钱包/斜挎包/穿搭/搭配/马甲/背心/吊带/袜子/丝袜/打底裤/短裤/阔腿裤 等作为主体产品
-2. 剔除化妆品本体：面霜/乳液/精华/水乳/爽肤水/洗面奶/卸妆/防晒/口红/唇膏/粉底/腮红/眼影/睫毛膏/眉笔/眼线/隔离/BB霜/CC霜/散粉/定妆/护手霜/身体乳/沐浴露/洗发水/护发素/面膜 等作为主体产品
-3. 剔除食品本体：可直接食用的食品、饮品、零食、生鲜、酒水、调味料等作为主体
-4. 剔除虚拟产品：/账号/会员/充值/代充/脚本/解封/解除封/号码/手机号接收/优惠券/e卡/代点/外卖代购/资源包/激活码/CDK/游戏币/战令/皮肤代购 等
-5. 剔除品牌词：含有任何品牌名的词（国产外资品牌均包括，包括变体写法如wx=微信）
-6. 剔除店铺名：明显是店铺名/工作室名/个人名/账号名的词
-7. 剔除无意义词组：表述不完整、无法明确选品方向的词
-8. 剔除违规低俗词：色情/低俗/暴力/管制品/违法物品相关
-9. 剔除管制危险品：农药/杀虫剂/爆炸物/硝酸钾/甲铵磷/敌畏/考场信号遮蔽 等
-10. 剔除活体生物交易：活虫/活苗（食用）/活禽交易等
-11. 额外剔除：贴纸/种子/鱼笼/活苗（食用）/活禽交易等
-12. 若可明确判断该蓝海词对应商品单价在 5 元以下，直接剔除。
-
-【保留原则】
-- 为服饰/化妆品/食品配套的工具、配件、辅料、收纳、展示类产品→保留
-- 通用日用品、家居、电子、母婴、宠物、户外、文具等→保留
-- 词虽奇特但确实是具体可选品的通用词→保留
-
-【输出格式】
-只返回JSON数组，不要有任何其他文字、解释或markdown代码块：
-[{"word":"词","keep":true,"reason":"保留原因"},{"word":"词","keep":false,"reason":"剔除原因"}]`
-    };
+    loadPromptTemplatesFromApi();
 
     function loadPromptTemplate() {
         const template = promptTemplate.value;

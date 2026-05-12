@@ -23,6 +23,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
+import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
@@ -84,6 +87,21 @@ public class FilterController {
         } catch (Exception e) {
             result.put("error", "文件读取失败: " + e.getMessage());
             return ResponseEntity.badRequest().body(result);
+        }
+
+        // Save a copy to the RPA history directory with timestamp
+        String historyDir = "C:\\Users\\46201\\Documents\\无极RPA文件处理\\历史";
+        try {
+            String timestamp = java.time.LocalDateTime.now()
+                    .format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+            String baseName = filename.substring(0, filename.lastIndexOf('.'));
+            String ext = filename.substring(filename.lastIndexOf('.'));
+            java.nio.file.Path historyPath = java.nio.file.Paths.get(historyDir, baseName + "_" + timestamp + ext);
+            java.nio.file.Files.createDirectories(java.nio.file.Paths.get(historyDir));
+            java.nio.file.Files.write(historyPath, fileBytes);
+            log.info("已保存上传副本到: {}", historyPath);
+        } catch (Exception e) {
+            log.warn("保存上传副本到历史目录失败: {}", e.getMessage());
         }
 
         // Start async processing
