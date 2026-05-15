@@ -295,8 +295,7 @@ public class QianniuAttributeScraper {
         }
 
         // 第二步：用 Playwright locator 按序号点击每个下拉框
-        // 关键点：不使用 CSS nth-of-type（按标签名算的，索引不准），改用 locator.nth(i)
-        int selectIndex = 0;
+        int domIndex = 0;  // DOM 中所有 .next-input-control 的全局索引
         for (Map<String, Object> fieldData : fieldResults) {
             String label = (String) fieldData.get("label");
             boolean required = Boolean.TRUE.equals(fieldData.get("required"));
@@ -306,13 +305,18 @@ public class QianniuAttributeScraper {
 
             List<String> options = new ArrayList<>();
             if (hasSelect) {
-                log.info("  正在提取 [{}] (第 {} 个下拉)...", label, selectIndex + 1);
-                Locator selectLocator = page.locator(".default-items-item .next-select .next-input-control").nth(selectIndex);
-                options = extractAndClose(page, selectLocator);
-                log.info("  [{}] 类型: {}, 提取到 {} 个选项", label, type, options.size());
-                selectIndex++;
+                domIndex++;  // 无论是否有默认值，都要递增 DOM 索引
+                if (currentValue == null || currentValue.isEmpty()) {
+                    log.info("  正在提取 [{}] (第 {} 个下拉)...", label, domIndex);
+                    Locator selectLocator = page.locator(".default-items-item .next-select .next-input-control").nth(domIndex - 1);
+                    options = extractAndClose(page, selectLocator);
+                    log.info("  [{}] 类型: {}, 提取到 {} 个选项", label, type, options.size());
+                } else {
+                    log.info("  [{}] 类型: {}, 跳过（默认值: {}）", label, type, currentValue);
+                }
             } else {
-                log.info("  [{}] 类型: {}, 选项数: 0", label, type);
+                log.info("  [{}] 类型: {}, 选项数: 0{}", label, type,
+                        currentValue != null && !currentValue.isEmpty() ? " (默认值: " + currentValue + ")" : "");
             }
 
             AttributeField f = new AttributeField();
