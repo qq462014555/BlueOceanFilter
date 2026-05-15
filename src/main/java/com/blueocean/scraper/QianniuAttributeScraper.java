@@ -153,12 +153,6 @@ public class QianniuAttributeScraper {
         page.evaluate("() => window.scrollTo(0, 0);");
         page.waitForTimeout(300);
 
-        // 清理残留的 overlay
-        page.evaluate("() => {\n" +
-                "  document.querySelectorAll('.next-overlay-wrapper').forEach(e => e.remove());\n" +
-                "}");
-        page.waitForTimeout(1000);
-
         // 用 Playwright locator.click() 触发，能激活 React 事件链
         try {
             log.info("    尝试点击 locator...");
@@ -169,7 +163,7 @@ public class QianniuAttributeScraper {
             try { page.keyboard().press("Escape"); } catch (Exception ignored) {}
             return new ArrayList<>();
         }
-        page.waitForTimeout(800);
+        page.waitForTimeout(1000);
 
         List<String> options = new ArrayList<>();
         // 查找 overlay 中的选项，滚动逐步加载
@@ -266,8 +260,7 @@ public class QianniuAttributeScraper {
                 "() => {\n" +
                 "  const results = [];\n" +
                 "  const elements = document.querySelectorAll('.default-items-item');\n" +
-                "  \n" +
-                "  for (const el of elements) {\n" +
+                "  \n" + "  for (const el of elements) {\n" +
                 "    const labelEl = el.querySelector('.sell-component-info-wrapper-label [title], .sell-component-info-wrapper-label');\n" +
                 "    if (!labelEl) continue;\n" +
                 "    let label = labelEl.getAttribute('title') || labelEl.textContent.trim();\n" +
