@@ -22,7 +22,20 @@
       "Bash(curl *)",
       "WebFetch(domain:detail.1688.com)",
       "WebSearch",
-      "Bash(taskkill *)"
+      "Bash(taskkill *)",
+      "Bash(cmd //c \"mvnw.cmd compile 2>&1 | tail -20\")",
+      "Bash(cmd *)",
+      "Bash(python3 -m json.tool)",
+      "Bash(ls -la \"C:\\\\\\\\Users\\\\\\\\46201\\\\\\\\Documents\\\\\\\\无极RPA文件处理\\\\\\\\2026年05月14日10时59分_1688链接\\\\\\\\自行车_骑行装备_零配件_自行车零_配件_车篮_车筐\\\\\\\\\")",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(f'title={repr\\(x.get\\(\\\\\"title\\\\\"\\)\\)}, scraped={repr\\(x.get\\(\\\\\"scrapedTitle\\\\\"\\)\\)}, dir={repr\\(x.get\\(\\\\\"dirTitle\\\\\"\\)\\)}'\\) for x in d]\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(f'scrapedTitle={repr\\(x.get\\(\\\\\"scrapedTitle\\\\\"\\)\\)}, dirTitle={repr\\(x.get\\(\\\\\"dirTitle\\\\\"\\)\\)}'\\) for x in d]\")",
+      "Bash(python3 -c ' *)",
+      "Bash(node -e ' *)",
+      "Bash(node -e \"const p = 'C:\\\\\\\\\\\\\\\\Users\\\\\\\\\\\\\\\\46201\\\\\\\\\\\\\\\\Documents\\\\\\\\\\\\\\\\无极RPA文件处理\\\\\\\\\\\\\\\\2026年05月14日10时59分_1688链接\\\\\\\\\\\\\\\\自行车_骑行装备_零配件_自行车零_配件_车篮_车筐\\\\\\\\\\\\\\\\儿童自行车车筐前筐童车塑料车篮子11111111111111111111\\\\\\\\\\\\\\\\主图\\\\\\\\\\\\\\\\主图_01.jpg'; const encoded = encodeURIComponent\\(btoa\\(unescape\\(encodeURIComponent\\(p\\)\\)\\)\\); console.log\\(encoded\\);\")",
+      "Bash(node *)",
+      "Bash(findstr :8080)",
+      "Bash(python3 -c \"import json,sys; pages=json.load\\(sys.stdin\\); [print\\(f'{p[\\\\\"title\\\\\"][:60]} | {p[\\\\\"type\\\\\"]}'\\) for p in pages]\")",
+      "Bash(npm ls *)"
     ]
   }
 }

@@ -12,6 +12,7 @@ public class AppProperties {
     private int retryTimes = 3;
     private long sleepMs = 1000;
     private String outputDir = "output";
+    private String paddleocrEndpoint = "http://127.0.0.1:8866";
 
     public String getDashscopeApiKey() { return dashscopeApiKey; }
     public void setDashscopeApiKey(String dashscopeApiKey) { this.dashscopeApiKey = dashscopeApiKey; }
@@ -27,4 +28,7 @@ public class AppProperties {
 
     public String getOutputDir() { return outputDir; }
     public void setOutputDir(String outputDir) { this.outputDir = outputDir; }
+
+    public String getPaddleocrEndpoint() { return paddleocrEndpoint; }
+    public void setPaddleocrEndpoint(String paddleocrEndpoint) { this.paddleocrEndpoint = paddleocrEndpoint; }
 }

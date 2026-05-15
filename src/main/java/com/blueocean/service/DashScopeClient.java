@@ -456,7 +456,8 @@ public class DashScopeClient {
         log.info("[批量筛选-HTTP] 返回 {} 条结果（去重后 {} 条）", resp.size(), results.size());
 
         if (results.size() != words.size()) {
-            throw new IOException("模型返回结果数(" + results.size() + ")与输入词数(" + words.size() + ")不匹配");
+            log.warn("[批量筛选-HTTP] 结果数({})与输入词数({})不匹配，返回已有结果", results.size(), words.size());
+            // 不再抛异常，返回已有结果，由调用方收集缺失的词
         }
         return results;
     }

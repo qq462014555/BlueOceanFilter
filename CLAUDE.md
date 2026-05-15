@@ -15,6 +15,28 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **DashScope SDK 2.22.14**（通义千问 qwen3-max）
 - **Apache POI 5.2.3**（Excel 读写）
 - **FastJSON2 2.0.51**
+- **Spring Boot Mail**（任务完成/失败邮件通知）
+
+## 邮件通知配置
+
+任务完成或失败时自动发送邮件通知。需设置以下环境变量：
+
+| 变量 | 说明 | 默认值 |
+|---|---|---|
+| `MAIL_FROM` | 发件人邮箱 | 无（必须设置） |
+| `MAIL_TO` | 收件人邮箱 | 无（必须设置） |
+| `MAIL_HOST` | SMTP 服务器地址 | smtp.qq.com |
+| `MAIL_PORT` | SMTP 端口 | 587 |
+| `MAIL_USERNAME` | SMTP 用户名 | 同 MAIL_FROM |
+| `MAIL_PASSWORD` | SMTP 授权码 | 无（必须设置） |
+
+示例（Windows CMD）：
+```cmd
+set MAIL_FROM=your@qq.com
+set MAIL_TO=your@qq.com
+set MAIL_PASSWORD=your_smtp_auth_code
+bash mvnw spring-boot:run
+```
 
 ## 常用命令
 

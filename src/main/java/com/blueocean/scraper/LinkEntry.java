@@ -5,6 +5,7 @@ import java.util.Objects;
 public class LinkEntry {
     private String categoryPath;
     private String url;
+    private String title;
 
     public LinkEntry(String categoryPath, String url) {
         this.categoryPath = categoryPath;
@@ -13,6 +14,8 @@ public class LinkEntry {
 
     public String getCategoryPath() { return categoryPath; }
     public String getUrl() { return url; }
+    public String getTitle() { return title; }
+    public void setTitle(String title) { this.title = title; }
 
     @Override
     public String toString() {

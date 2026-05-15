@@ -13,10 +13,23 @@ mybatis-plus:
   #configuration:
    # log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
 
+  mail:
+    host: ${MAIL_HOST:smtp.qq.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
 app:
   dashscope-api-key: sk-b2307eb31b1c4100ab1d30d599753475
   batch-size: 200
   retry-times: 3
   sleep-ms: 1000
   output-dir: output
+  paddleocr-endpoint: http://127.0.0.1:8866
 
