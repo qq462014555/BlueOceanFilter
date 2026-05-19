@@ -7,13 +7,20 @@
         <sourceOutputDir name="target/generated-sources/annotations" />
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
-        <module name="BlueOceanFilter" />
+        <module name="blueocean-app" />
+        <module name="common-util" />
+        <module name="taobao-ad" />
+        <module name="scheduled-task" />
       </profile>
     </annotationProcessing>
   </component>
   <component name="JavacSettings">
     <option name="ADDITIONAL_OPTIONS_OVERRIDE">
-      <module name="BlueOceanFilter" options="-parameters" />
+      <module name="BlueOceanFilter" options="" />
+      <module name="blueocean-app" options="-parameters" />
+      <module name="common-util" options="-parameters" />
+      <module name="scheduled-task" options="-parameters" />
+      <module name="taobao-ad" options="-parameters" />
     </option>
   </component>
 </project>

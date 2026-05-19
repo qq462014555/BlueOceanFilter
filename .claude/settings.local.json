@@ -35,7 +35,16 @@
       "Bash(node *)",
       "Bash(findstr :8080)",
       "Bash(python3 -c \"import json,sys; pages=json.load\\(sys.stdin\\); [print\\(f'{p[\\\\\"title\\\\\"][:60]} | {p[\\\\\"type\\\\\"]}'\\) for p in pages]\")",
-      "Bash(npm ls *)"
+      "Bash(npm ls *)",
+      "Bash(find \"C:\\\\\\\\Users\\\\\\\\46201\\\\\\\\Documents\\\\\\\\无极RPA文件处理/2026年05月16日09时59分_1688链接/自行车_骑行装备_零配件_自行车零_配件_车篮_车筐\" -maxdepth 1 -type d)",
+      "Bash(ls *)",
+      "Bash(mv src/main/java/* blueocean-app/src/main/java/)",
+      "Bash(mv src/main/resources/* blueocean-app/src/main/resources/)",
+      "Read(//c/chrome-debug-1688/**)",
+      "Read(//c/chrome-debug-merchant/**)",
+      "Bash(iconv -f GBK -t UTF-8)",
+      "Bash(mvn dependency:tree -Dincludes=com.microsoft.playwright)",
+      "Bash(mvnw.cmd clean *)"
     ]
   }
 }
