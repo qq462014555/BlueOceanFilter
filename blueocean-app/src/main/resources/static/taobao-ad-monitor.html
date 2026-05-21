@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>淘宝付费监控</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f0f2f5;
+            padding: 24px 32px;
+            min-height: 100vh;
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+
+        /* Header */
+        .page-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+        .page-header h1 { font-size: 20px; color: #1a1a2e; }
+        .page-header h1 span { color: #1890ff; }
+        .page-header .subtitle { font-size: 12px; color: #999; margin-top: 2px; }
+        .header-actions { display: flex; gap: 8px; align-items: center; }
+
+        .btn {
+            padding: 7px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .btn-primary { background: #1890ff; color: white; }
+        .btn-primary:hover { background: #40a9ff; }
+        .btn-ghost { background: transparent; color: #1890ff; border: 1px solid #1890ff; }
+        .btn-ghost:hover { background: #e6f7ff; }
+        .btn-sm { padding: 4px 10px; font-size: 12px; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Time selector */
+        .time-bar {
+            background: white;
+            border-radius: 8px;
+            padding: 12px 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+        .time-btns { display: flex; gap: 2px; }
+        .time-btn {
+            padding: 5px 14px;
+            border: none;
+            background: transparent;
+            font-size: 13px;
+            color: #666;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.15s;
+        }
+        .time-btn:hover { background: #f5f5f5; }
+        .time-btn.active { background: #1890ff; color: white; }
+        .time-divider { width: 1px; height: 20px; background: #e8e8e8; margin: 0 4px; }
+        .date-inputs { display: flex; align-items: center; gap: 6px; }
+        .date-inputs input {
+            padding: 5px 8px;
+            border: 1px solid #d9d9d9;
+            border-radius: 4px;
+            font-size: 13px;
+            width: 120px;
+        }
+        .date-inputs input:focus { outline: none; border-color: #1890ff; }
+        .date-inputs span { color: #999; font-size: 13px; }
+        .updated-time { margin-left: auto; font-size: 12px; color: #bbb; }
+
+        /* Summary cards */
+        .summary-row {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 14px;
+            margin-bottom: 16px;
+        }
+        .summary-card {
+            background: white;
+            border-radius: 8px;
+            padding: 18px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            position: relative;
+            overflow: hidden;
+        }
+        .summary-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+        }
+        .summary-card.blue::before { background: #1890ff; }
+        .summary-card.green::before { background: #52c41a; }
+        .summary-card.orange::before { background: #fa8c16; }
+        .summary-card.purple::before { background: #722ed1; }
+        .summary-card.red::before { background: #f5222d; }
+
+        .summary-card .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        .summary-card .card-title {
+            font-size: 13px;
+            color: #888;
+            font-weight: 500;
+        }
+        .summary-card .card-value {
+            font-size: 26px;
+            font-weight: 700;
+            color: #1a1a2e;
+        }
+        .summary-card .card-sub {
+            display: flex;
+            gap: 12px;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #f0f0f0;
+        }
+        .summary-card .sub-item {
+            font-size: 12px;
+            color: #666;
+        }
+        .summary-card .sub-item strong {
+            color: #333;
+            font-weight: 600;
+        }
+
+        /* Metric strip */
+        .metric-strip {
+            background: white;
+            border-radius: 8px;
+            padding: 14px 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 16px;
+        }
+        .metric-item { text-align: center; }
+        .metric-item .m-label { font-size: 12px; color: #999; margin-bottom: 4px; }
+        .metric-item .m-value { font-size: 20px; font-weight: 700; color: #1a1a2e; }
+        .metric-divider { width: 1px; background: #f0f0f0; margin: 0 8px; }
+
+        /* Table */
+        .table-card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            overflow: hidden;
+        }
+        .table-toolbar {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            gap: 10px;
+            border-bottom: 1px solid #f0f0f0;
+            flex-wrap: wrap;
+        }
+        .search-input {
+            padding: 6px 10px;
+            border: 1px solid #d9d9d9;
+            border-radius: 4px;
+            font-size: 13px;
+            width: 260px;
+        }
+        .search-input:focus { outline: none; border-color: #1890ff; }
+        .filter-group { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+        .filter-group label { font-size: 13px; color: #666; }
+        .filter-group select {
+            padding: 5px 8px;
+            border: 1px solid #d9d9d9;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        thead { background: #fafafa; }
+        th {
+            padding: 11px 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #333;
+            border-bottom: 1px solid #f0f0f0;
+            white-space: nowrap;
+            cursor: pointer;
+            user-select: none;
+        }
+        th:hover { background: #f5f5f5; }
+        th.center, td.center { text-align: center; }
+        td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #f0f0f0;
+            color: #555;
+        }
+        tr:hover td { background: #fafafa; }
+        .shop-name { font-weight: 500; color: #333; }
+        .shop-ver { font-size: 11px; color: #bbb; }
+        .balance { color: #fa8c16; font-weight: 500; }
+        .gmv-val { color: #52c41a; }
+        .roi-val { font-weight: 600; }
+        .roi-good { color: #52c41a; }
+        .roi-bad { color: #f5222d; }
+
+        .pagination {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 14px;
+        }
+        .pagination button {
+            padding: 5px 12px;
+            border: 1px solid #d9d9d9;
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .pagination button:hover:not(:disabled) { border-color: #1890ff; color: #1890ff; }
+        .pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
+        .pagination span { font-size: 13px; color: #666; }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #bbb;
+        }
+        .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+
+        .toast {
+            position: fixed;
+            top: 24px; right: 24px;
+            padding: 10px 20px;
+            background: white;
+            border-radius: 6px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+            z-index: 2000;
+            font-size: 13px;
+            animation: slideIn 0.2s ease;
+        }
+        .toast.success { border-left: 3px solid #52c41a; }
+        .toast.error { border-left: 3px solid #ff4d4f; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- Header -->
+    <div class="page-header">
+        <div>
+            <h1><span>&#128200;</span> 淘宝付费监控</h1>
+            <div class="subtitle">多店铺推广数据汇总分析</div>
+        </div>
+        <div class="header-actions">
+            <button class="btn btn-ghost" onclick="launchChrome()" id="launchBtn">&#9642; 启动浏览器</button>
+            <button class="btn btn-ghost" id="refreshBtn" onclick="refreshAll()">&#8635; 刷新数据</button>
+            <button class="btn btn-ghost" onclick="scrapeDetails()" id="detailBtn">&#128270; 抓取详情</button>
+            <button class="btn btn-primary" onclick="exportReport()">&#128229; 导出报表</button>
+        </div>
+    </div>
+
+    <!-- Time selector -->
+    <div class="time-bar">
+        <div class="time-btns">
+            <button class="time-btn active" data-range="today">今日</button>
+            <button class="time-btn" data-range="yesterday">昨日</button>
+            <button class="time-btn" data-range="7days">过去7天</button>
+            <button class="time-btn" data-range="30days">过去30天</button>
+            <button class="time-btn" data-range="90days">过去90天</button>
+        </div>
+        <div class="time-divider"></div>
+        <div class="date-inputs">
+            <input type="date" id="startDate">
+            <span>至</span>
+            <input type="date" id="endDate">
+            <button class="btn btn-sm btn-primary" onclick="applyCustomDate()">确定</button>
+        </div>
+        <div class="updated-time" id="updatedTime">尚未加载数据</div>
+    </div>
+
+    <!-- Summary cards -->
+    <div class="summary-row">
+        <div class="summary-card blue">
+            <div class="card-header"><span class="card-title">有效店铺</span></div>
+            <div class="card-value" id="shopCount">0</div>
+            <div class="card-sub"><span class="sub-item">推广中</span></div>
+        </div>
+        <div class="summary-card orange">
+            <div class="card-header"><span class="card-title">总花费</span></div>
+            <div class="card-value" id="totalCost">0.00</div>
+            <div class="card-sub">
+                <span class="sub-item">关键词 <strong id="kwCost">0.00</strong></span>
+                <span class="sub-item">全站 <strong id="siteCost">0.00</strong></span>
+                <span class="sub-item">人群 <strong id="crowdCost">0.00</strong></span>
+            </div>
+        </div>
+        <div class="summary-card green">
+            <div class="card-header"><span class="card-title">总成交金额</span></div>
+            <div class="card-value" id="totalGmv">0.00</div>
+            <div class="card-sub">
+                <span class="sub-item">关键词 <strong id="kwGmv">0.00</strong></span>
+                <span class="sub-item">全站 <strong id="siteGmv">0.00</strong></span>
+                <span class="sub-item">人群 <strong id="crowdGmv">0.00</strong></span>
+            </div>
+        </div>
+        <div class="summary-card purple">
+            <div class="card-header"><span class="card-title">投产比</span></div>
+            <div class="card-value" id="totalRoi">0.00</div>
+            <div class="card-sub">
+                <span class="sub-item">关键词 <strong id="kwRoi">0.00</strong></span>
+                <span class="sub-item">全站 <strong id="siteRoi">0.00</strong></span>
+                <span class="sub-item">人群 <strong id="crowdRoi">0.00</strong></span>
+            </div>
+        </div>
+        <div class="summary-card red">
+            <div class="card-header"><span class="card-title">点击率</span></div>
+            <div class="card-value" id="ctr">0.00%</div>
+            <div class="card-sub">
+                <span class="sub-item">展现 <strong id="impressions">0</strong></span>
+                <span class="sub-item">点击 <strong id="clicks">0</strong></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Data table -->
+    <div class="table-card">
+        <div class="table-toolbar">
+            <input type="text" class="search-input" id="searchInput" placeholder="搜索淘宝旺旺、店铺名称..." onkeydown="if(event.key==='Enter')refreshAll()">
+            <button class="btn btn-sm btn-ghost" onclick="refreshAll()">搜索</button>
+            <div class="filter-group">
+                <span style="color:#999;font-size:12px">数据实时从 Chrome 浏览器同步</span>
+            </div>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>淘宝旺旺</th>
+                    <th>店铺名称</th>
+                    <th class="center">推广余额(元)</th>
+                    <th class="center" data-sort="impressions">展现量</th>
+                    <th class="center" data-sort="clicks">点击量</th>
+                    <th class="center" data-sort="cost">花费</th>
+                    <th class="center" data-sort="clickRate">点击率</th>
+                    <th class="center" data-sort="totalGmv">总成交金额</th>
+                    <th class="center" data-sort="roi">投入产出比</th>
+                </tr>
+            </thead>
+            <tbody id="reportTableBody">
+                <tr><td colspan="9" class="empty-state"><div class="icon">&#128203;</div><p>暂无数据</p></td></tr>
+            </tbody>
+        </table>
+        <div class="pagination" id="pagination"></div>
+    </div>
+</div>
+
+<script>
+    let currentDateRange = 'today';
+    let autoRefreshTimer = null;
+    const AUTO_REFRESH_INTERVAL = 5 * 60 * 1000; // 5 分钟
+
+    function startAutoRefresh() {
+        stopAutoRefresh();
+        countdown = AUTO_REFRESH_INTERVAL;
+        updateRefreshBtn();
+        countdownTimer = setInterval(updateRefreshBtn, 1000);
+        autoRefreshTimer = setInterval(() => {
+            document.getElementById('refreshBtn').click();
+        }, AUTO_REFRESH_INTERVAL);
+    }
+
+    let countdownTimer = null;
+    let countdown = 0;
+
+    function updateRefreshBtn() {
+        if (countdown > 0) {
+            countdown -= 1000;
+            if (countdown < 0) countdown = 0;
+            const sec = Math.ceil(countdown / 1000);
+            document.getElementById('refreshBtn').innerHTML = `&#8635; ${sec}s 后刷新`;
+        }
+    }
+
+    function stopAutoRefresh() {
+        if (autoRefreshTimer) {
+            clearInterval(autoRefreshTimer);
+            autoRefreshTimer = null;
+        }
+        if (countdownTimer) {
+            clearInterval(countdownTimer);
+            countdownTimer = null;
+        }
+        document.getElementById('refreshBtn').innerHTML = '&#8635; 刷新数据';
+    }
+
+    function shouldAutoRefresh() {
+        return currentDateRange === 'today';
+    }
+
+    // ──── Time selector ────
+    document.querySelectorAll('.time-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.time-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentDateRange = btn.dataset.range;
+
+            // 计算日期并填充到输入框
+            const today = new Date();
+            const yesterday = new Date(today.getTime() - 86400000);
+            let start, end;
+            if (currentDateRange === 'today') {
+                start = end = today;
+            } else if (currentDateRange === 'yesterday') {
+                start = end = yesterday;
+            } else if (currentDateRange === '7days') {
+                start = new Date(yesterday.getTime() - 6 * 86400000);
+                end = yesterday;
+            } else if (currentDateRange === '30days') {
+                start = new Date(yesterday.getTime() - 29 * 86400000);
+                end = yesterday;
+            } else if (currentDateRange === '90days') {
+                start = new Date(yesterday.getTime() - 89 * 86400000);
+                end = yesterday;
+            }
+            if (start && end) {
+                document.getElementById('startDate').value = fmtDate(start);
+                document.getElementById('endDate').value = fmtDate(end);
+            }
+            refreshAll();
+            if (shouldAutoRefresh()) {
+                startAutoRefresh();
+            } else {
+                stopAutoRefresh();
+            }
+        });
+    });
+
+    function applyCustomDate() {
+        const s = document.getElementById('startDate').value;
+        const e = document.getElementById('endDate').value;
+        if (!s || !e) { showToast('请选择日期范围', 'error'); return; }
+        document.querySelectorAll('.time-btn').forEach(b => b.classList.remove('active'));
+        currentDateRange = 'custom';
+        refreshAll();
+    }
+
+    async function refreshAll() {
+        if (shouldAutoRefresh()) {
+            startAutoRefresh();
+        }
+        showToast('正在从浏览器同步数据...');
+        try {
+            const s = document.getElementById('startDate').value;
+            const e = document.getElementById('endDate').value;
+            if (!s || !e) { showToast('请先选择日期范围', 'error'); return; }
+
+            const params = new URLSearchParams();
+            params.set('startDate', s);
+            params.set('endDate', e);
+
+            const keyword = document.getElementById('searchInput').value.trim();
+            if (keyword) params.set('keyword', keyword);
+
+            sendRequest(params);
+        } catch (e) {
+            showToast('同步失败: ' + e.message, 'error');
+        }
+    }
+
+    async function sendRequest(params) {
+        const resp = await fetch('/api/taobao-ad/live-data?' + params);
+        const data = await resp.json();
+        if (!resp.ok) {
+            const msg = data.error || '同步失败';
+            if (msg.includes('请先启动')) {
+                showToast('请先点击"启动浏览器"按钮', 'error');
+            } else {
+                showToast(msg, 'error');
+            }
+            return;
+        }
+        renderLiveData(data);
+    }
+
+    function renderLiveData(data) {
+        const shops = data.records || [];
+        if (shops.length === 0) {
+            showToast('未获取到数据', 'error');
+            return;
+        }
+        // Calculate summary
+        let totalImpressions = 0, totalClicks = 0, totalCost = 0, totalGmv = 0;
+        for (const s of shops) {
+            totalImpressions += s.impressions || 0;
+            totalClicks += s.clicks || 0;
+            totalCost += s.cost || 0;
+            totalGmv += s.totalGmv || 0;
+        }
+        const totalRoi = totalCost > 0 ? totalGmv / totalCost : 0;
+        const clickRate = totalImpressions > 0 ? totalClicks * 100.0 / totalImpressions : 0;
+
+        document.getElementById('shopCount').textContent = shops.length;
+        document.getElementById('totalCost').textContent = totalCost.toFixed(2);
+        document.getElementById('totalGmv').textContent = totalGmv.toFixed(2);
+        document.getElementById('totalRoi').textContent = totalRoi.toFixed(2);
+        document.getElementById('ctr').textContent = clickRate.toFixed(2) + '%';
+        document.getElementById('impressions').textContent = fmtNum(totalImpressions);
+        document.getElementById('clicks').textContent = fmtNum(totalClicks);
+
+        // Render table
+        const tbody = document.getElementById('reportTableBody');
+        tbody.innerHTML = shops.map(r => {
+            const roiClass = (r.roi || 0) >= 3 ? 'roi-good' : (r.roi || 0) > 0 ? '' : 'roi-bad';
+            const shopName = r.shopName || '-';
+            const shopVer = r.shopVersion ? `(${r.shopVersion})` : '';
+            const balance = (r.balance || 0).toFixed(2);
+            const impressions = fmtNum(r.impressions || 0);
+            const clicks = fmtNum(r.clicks || 0);
+            const cost = (r.cost || 0).toFixed(2);
+            const cr = (r.clickRate || 0).toFixed(2) + '%';
+            const gmv = (r.totalGmv || 0).toFixed(2);
+            const roi = (r.roi || 0).toFixed(2);
+            const wangwang = r.wangwang || '-';
+            return `<tr>
+                <td>${esc(wangwang)}</td>
+                <td><span class="shop-name">${esc(shopName)}</span><span class="shop-ver">${esc(shopVer)}</span></td>
+                <td class="center balance">${balance}</td>
+                <td class="center">${impressions}</td>
+                <td class="center">${clicks}</td>
+                <td class="center">${cost}</td>
+                <td class="center">${cr}</td>
+                <td class="center gmv-val">${gmv}</td>
+                <td class="center roi-val ${roiClass}">${roi}</td>
+            </tr>`;
+        }).join('');
+
+        document.getElementById('pagination').innerHTML = `<span>共 ${shops.length} 条</span>`;
+
+        const sd = data.startDate || '';
+        const ed = data.endDate || '';
+        document.getElementById('updatedTime').textContent = `数据日期: ${sd} ~ ${ed}  |  ${new Date().toLocaleTimeString()}`;
+        showToast('数据已更新，共 ' + shops.length + ' 个店铺');
+    }
+
+    function fmtDate(d) {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+    }
+
+    async function launchChrome() {
+        const btn = document.getElementById('launchBtn');
+        btn.disabled = true;
+        btn.textContent = '启动中...';
+        try {
+            const resp = await fetch('/api/taobao-ad/config');
+            const cfg = await resp.json();
+            if (!resp.ok) { showToast('获取配置失败', 'error'); return; }
+
+            const launchResp = await fetch(`/api/scraper/launch-chrome/${cfg.chromePort}`, { method: 'POST' });
+            const data = await launchResp.json();
+            if (!launchResp.ok) { showToast(data.message || '启动失败', 'error'); return; }
+            showToast('Chrome 已启动（端口 ' + cfg.chromePort + '）');
+        } catch (e) {
+            showToast('启动失败: ' + e.message, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '启动浏览器';
+        }
+    }
+
+    async function scrapeDetails() {
+        const s = document.getElementById('startDate').value;
+        const e = document.getElementById('endDate').value;
+        if (!s || !e) { showToast('请先选择日期范围', 'error'); return; }
+
+        showToast('开始抓取店铺详情...');
+        const btn = document.getElementById('detailBtn');
+        btn.disabled = true;
+        btn.textContent = '抓取中...';
+
+        try {
+            const params = new URLSearchParams();
+            params.set('startDate', s);
+            params.set('endDate', e);
+
+            const resp = await fetch('/api/taobao-ad/scrape-details?' + params, { method: 'POST' });
+            const data = await resp.json();
+            if (!resp.ok) {
+                showToast('抓取失败: ' + (data.error || '未知错误'), 'error');
+                return;
+            }
+
+            showToast('详情抓取完成！成功 ' + data.shops.filter(s => s.success).length + ' 个，失败 ' + data.shops.filter(s => !s.success).length + ' 个');
+            console.log('店铺详情数据:', data);
+        } catch (e) {
+            showToast('请求失败: ' + e.message, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '🔍 抓取详情';
+        }
+    }
+
+    // ──── Export ────
+    function exportReport() {
+        showToast('导出功能开发中...');
+    }
+
+    // ──── Utilities ────
+    function fmtNum(n) {
+        if (n >= 10000) return (n / 10000).toFixed(1) + '万';
+        return n.toLocaleString();
+    }
+    function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+    function showToast(msg, type = 'success') {
+        const el = document.createElement('div');
+        el.className = 'toast ' + type;
+        el.textContent = msg;
+        document.body.appendChild(el);
+        setTimeout(() => el.remove(), 2500);
+    }
+
+    // ──── Init ────
+    // 初始化日期输入框为今天
+    const initToday = new Date();
+    document.getElementById('startDate').value = fmtDate(initToday);
+    document.getElementById('endDate').value = fmtDate(initToday);
+    refreshAll();
+    startAutoRefresh(); // 今日默认开启自动刷新
+</script>
+</body>
+</html>

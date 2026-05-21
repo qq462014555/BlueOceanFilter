@@ -1,0 +1,8 @@
+com\blueocean\scheduledtask\mapper\ScheduledTaskMapper.class
+com\blueocean\scheduledtask\service\ScheduledTaskService.class
+com\blueocean\scheduledtask\mapper\TaskExecutionLogMapper.class
+com\blueocean\scheduledtask\controller\ScheduledTaskController.class
+com\blueocean\scheduledtask\service\ScheduledTaskDiscoveryService.class
+com\blueocean\scheduledtask\entity\ScheduledTask.class
+com\blueocean\scheduledtask\entity\TaskExecutionLog.class
+com\blueocean\scheduledtask\service\ScheduledTaskService$1.class

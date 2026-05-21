@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>定时任务</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ee 100%);
+            padding: 32px 40px;
+            min-height: 100vh;
+        }
+        .container { max-width: 1600px; margin: 0 auto; padding: 0 20px; }
+
+        /* Header */
+        .page-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 28px;
+        }
+        .page-header .icon {
+            width: 40px; height: 40px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 20px; color: #fff;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        .page-header h1 { font-size: 22px; color: #1a1a2e; }
+        .page-header .subtitle { color: #888; font-size: 13px; }
+
+        /* Toolbar */
+        .toolbar {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .btn {
+            padding: 8px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+        }
+        .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4); }
+        .btn-success { background: #52c41a; color: white; }
+        .btn-success:hover { background: #73d13d; }
+        .btn-warning { background: #faad14; color: white; }
+        .btn-warning:hover { background: #ffc53d; }
+        .btn-danger { background: #ff4d4f; color: white; }
+        .btn-danger:hover { background: #ff7875; }
+        .btn-ghost {
+            background: white;
+            color: #1890ff;
+            border: 1px solid #d9d9d9;
+        }
+        .btn-ghost:hover { border-color: #1890ff; background: #f0f7ff; }
+        .btn-sm { padding: 4px 10px; font-size: 12px; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-left: auto;
+        }
+        .filter-group label { font-size: 13px; color: #666; }
+        .filter-group select {
+            padding: 6px 10px;
+            border: 1px solid #d9d9d9;
+            border-radius: 6px;
+            font-size: 13px;
+            background: white;
+        }
+
+        /* Table Card */
+        .table-card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+            overflow-x: auto;
+            overflow: hidden;
+            margin-bottom: 24px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            min-width: 1400px;
+        }
+        thead { background: #fafbfc; }
+        th {
+            padding: 14px 14px;
+            text-align: left;
+            font-weight: 600;
+            color: #606266;
+            border-bottom: 2px solid #ebeef5;
+            white-space: nowrap;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        td {
+            padding: 12px 14px;
+            border-bottom: 1px solid #f2f3f5;
+            color: #4a4a4a;
+            vertical-align: middle;
+        }
+        tr:hover td { background: #fafbfc; }
+        td.content-cell {
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* Status Badge */
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .status-badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; }
+        .status-active { background: #f0fff4; color: #52c41a; border: 1px solid #b7eb8f; }
+        .status-active::before { background: #52c41a; }
+        .status-paused { background: #fff7e6; color: #faad14; border: 1px solid #ffe58f; }
+        .status-paused::before { background: #faad14; }
+
+        /* Method Tag */
+        .method-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            background: linear-gradient(135deg, #f0f0ff, #e8f4fd);
+            border: 1px solid #d4d4f0;
+            border-radius: 6px;
+            font-size: 12px;
+            color: #667eea;
+            font-weight: 500;
+            white-space: nowrap;
+        }
+
+        .actions { display: flex; gap: 4px; flex-wrap: nowrap; }
+
+        /* Pagination */
+        .pagination {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 16px;
+        }
+        .pagination button {
+            padding: 5px 12px;
+            border: 1px solid #d9d9d9;
+            background: white;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+        .pagination button:hover:not(:disabled) { border-color: #667eea; color: #667eea; }
+        .pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
+        .pagination span { font-size: 13px; color: #666; }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(2px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            animation: fadeIn 0.2s ease;
+        }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        .modal {
+            background: white;
+            border-radius: 16px;
+            width: 600px;
+            max-width: 90vw;
+            max-height: 85vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+            animation: slideUp 0.3s ease;
+        }
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 20px 24px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .modal-header h2 { font-size: 17px; color: #1a1a2e; }
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 22px;
+            color: #999;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 6px;
+            transition: all 0.2s;
+            width: 32px; height: 32px;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .modal-close:hover { background: #f5f5f5; color: #333; }
+        .modal-body { padding: 24px; }
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            padding: 16px 24px;
+            border-top: 1px solid #f0f0f0;
+            background: #fafbfc;
+            border-radius: 0 0 16px 16px;
+        }
+
+        /* Form */
+        .form-group { margin-bottom: 18px; }
+        .form-group label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+        }
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1.5px solid #e4e4e7;
+            border-radius: 8px;
+            font-size: 13px;
+            font-family: inherit;
+            transition: all 0.2s;
+            background: #fafbfc;
+        }
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+            background: white;
+        }
+        .form-group textarea { min-height: 100px; resize: vertical; }
+        .form-group .hint {
+            font-size: 11px;
+            color: #999;
+            margin-top: 6px;
+        }
+
+        /* Method Selector in Form */
+        .method-selector {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .method-selector input[readonly] {
+            background: #fafbfc;
+            cursor: pointer;
+            flex: 1;
+        }
+        .method-selector input[readonly]:not(:placeholder-shown) {
+            background: #f0f7ff;
+            border-color: #667eea;
+        }
+        .method-clear-btn {
+            padding: 4px 8px;
+            background: #f5f5f5;
+            border: none;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #999;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .method-clear-btn:hover { background: #ffebee; color: #ff4d4f; }
+
+        /* Cron Presets */
+        .cron-presets {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 10px;
+        }
+        .cron-presets button {
+            padding: 4px 12px;
+            border: 1px solid #e4e4e7;
+            background: white;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            color: #666;
+            transition: all 0.2s;
+        }
+        .cron-presets button:hover {
+            border-color: #667eea;
+            color: #667eea;
+            background: #f8f6ff;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #bbb;
+        }
+        .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+        .empty-state p { font-size: 14px; }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            top: 24px;
+            right: 24px;
+            padding: 12px 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+            z-index: 2000;
+            font-size: 13px;
+            animation: slideIn 0.3s ease;
+        }
+        .toast.success { border-left: 4px solid #52c41a; }
+        .toast.error { border-left: 4px solid #ff4d4f; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        /* Logs */
+        .log-item {
+            padding: 12px 0;
+            border-bottom: 1px solid #f5f5f5;
+        }
+        .log-item:last-child { border-bottom: none; }
+        .log-time { font-size: 12px; color: #999; }
+        .log-status { font-size: 12px; font-weight: 500; }
+        .log-result { font-size: 12px; color: #666; }
+
+        .hidden { display: none !important; }
+
+        /* Method Picker */
+        .method-item {
+            padding: 14px 16px;
+            border: 1.5px solid #e8e8e8;
+            border-radius: 10px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+        }
+        .method-item::before {
+            content: '';
+            position: absolute;
+            left: 0; top: 0; bottom: 0;
+            width: 3px;
+            background: transparent;
+            border-radius: 0 3px 3px 0;
+            transition: background 0.2s;
+        }
+        .method-item:hover {
+            border-color: #667eea;
+            background: linear-gradient(135deg, #faf8ff, #f0f7ff);
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.1);
+        }
+        .method-item:hover::before { background: linear-gradient(180deg, #667eea, #764ba2); }
+        .method-item .method-name { font-weight: 600; font-size: 14px; color: #1a1a2e; }
+        .method-item .method-desc { font-size: 12px; color: #888; margin-top: 4px; line-height: 1.4; }
+        .method-item .method-sig { font-size: 11px; color: #bbb; margin-top: 4px; font-family: 'JetBrains Mono', 'Fira Code', monospace; background: #f5f5f5; padding: 2px 6px; border-radius: 4px; display: inline-block; }
+
+        /* Method Params */
+        .params-card {
+            background: #f8f9fa;
+            border: 1px solid #e8e8e8;
+            border-radius: 10px;
+            padding: 16px;
+            margin-top: 12px;
+        }
+        .params-card .params-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: #666;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .params-card .params-title::before {
+            content: '';
+            width: 4px; height: 4px;
+            background: #667eea;
+            border-radius: 50%;
+        }
+        .param-group { margin-bottom: 12px; }
+        .param-group:last-child { margin-bottom: 0; }
+        .param-group label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 6px;
+            display: block;
+            font-weight: 500;
+        }
+        .param-group label .type-badge {
+            font-size: 10px;
+            color: #667eea;
+            background: #f0f0ff;
+            padding: 1px 6px;
+            border-radius: 4px;
+            font-weight: 400;
+            margin-left: 6px;
+        }
+        .param-group input,
+        .param-group select,
+        .param-group textarea {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1.5px solid #e4e4e7;
+            border-radius: 6px;
+            font-size: 13px;
+            background: white;
+            transition: all 0.2s;
+        }
+        .param-group input:focus,
+        .param-group select:focus,
+        .param-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+        }
+        .param-group textarea { min-height: 80px; resize: vertical; font-family: inherit; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="page-header">
+        <div class="icon">&#9201;</div>
+        <div>
+            <h1>定时任务管理</h1>
+            <p class="subtitle">创建定时任务，选择执行方法，设置执行周期</p>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <button class="btn btn-primary" onclick="openCreateModal()">&#43; 新建任务</button>
+        <button class="btn btn-ghost" onclick="loadTasks()">&#8635; 刷新</button>
+        <div class="filter-group">
+            <label>状态：</label>
+            <select id="statusFilter" onchange="loadTasks()">
+                <option value="">全部</option>
+                <option value="ACTIVE">运行中</option>
+                <option value="PAUSED">已暂停</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="table-card">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>任务名称</th>
+                    <th>绑定方法</th>
+                    <th>内容</th>
+                    <th>定时表达式</th>
+                    <th>状态</th>
+                    <th>执行次数</th>
+                    <th>上次执行</th>
+                    <th>下次执行</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="taskTableBody">
+                <tr><td colspan="10" class="empty-state"><div class="icon">&#128203;</div><p>暂无任务，点击上方按钮创建</p></td></tr>
+            </tbody>
+        </table>
+        <div class="pagination" id="pagination"></div>
+    </div>
+</div>
+
+<!-- Create/Edit Modal -->
+<div id="taskModal" class="modal-overlay hidden">
+    <div class="modal">
+        <div class="modal-header">
+            <h2 id="modalTitle">新建任务</h2>
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="editTaskId">
+            <div class="form-group">
+                <label for="taskName">任务名称</label>
+                <input type="text" id="taskName" placeholder="例如：每日关键词更新">
+            </div>
+            <div class="form-group">
+                <label>绑定方法 <span style="font-weight:400;color:#999;">（可选）</span></label>
+                <div class="method-selector">
+                    <input type="text" id="methodDisplay" readonly placeholder="点击按钮选择要执行的方法" style="flex:1;">
+                    <input type="hidden" id="methodBeanName">
+                    <input type="hidden" id="methodSignature">
+                    <button class="btn btn-primary btn-sm" onclick="openMethodPicker()">选择</button>
+                    <button class="method-clear-btn" onclick="clearMethod()">清除</button>
+                </div>
+                <div id="methodParamsContainer"></div>
+            </div>
+            <div class="form-group">
+                <label for="taskContent">任务备注</label>
+                <textarea id="taskContent" placeholder="输入任务备注信息，如执行参数说明、注意事项等"></textarea>
+            </div>
+            <div class="form-group">
+                <label for="cronExpression">Cron 表达式</label>
+                <input type="text" id="cronExpression" placeholder="例如：0 0 9 * * ?">
+                <div class="hint">格式：秒 分 时 日 月 周 &mdash; 留空则不定时执行，需手动触发</div>
+                <div class="cron-presets">
+                    <button onclick="setCron('0 0 9 * * ?')">每天 9:00</button>
+                    <button onclick="setCron('0 0 12 * * ?')">每天 12:00</button>
+                    <button onclick="setCron('0 0 18 * * ?')">每天 18:00</button>
+                    <button onclick="setCron('0 */30 * * * ?')">每30分钟</button>
+                    <button onclick="setCron('0 0 * * * ?')">每小时</button>
+                    <button onclick="setCron('0 0 9 * * 1-5')">工作日 9:00</button>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>静默时间段 <span style="font-weight:400;color:#999;">（此时间段内不触发任务）</span></label>
+                <div style="display:flex;gap:10px;align-items:center;">
+                    <div style="flex:1;">
+                        <label style="font-size:12px;color:#888;margin-bottom:4px;display:block;">开始时间</label>
+                        <input type="time" id="excludeTimeStart" style="width:100%;">
+                    </div>
+                    <div style="color:#999;font-size:18px;padding-top:20px;">~</div>
+                    <div style="flex:1;">
+                        <label style="font-size:12px;color:#888;margin-bottom:4px;display:block;">结束时间</label>
+                        <input type="time" id="excludeTimeEnd" style="width:100%;">
+                    </div>
+                    <button class="method-clear-btn" onclick="clearExcludeTime()" style="margin-top:16px;">清除</button>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-ghost" onclick="closeModal()">取消</button>
+            <button class="btn btn-primary" id="saveBtn" onclick="saveTask()">保存</button>
+        </div>
+    </div>
+</div>
+
+<!-- Logs Modal -->
+<div id="logsModal" class="modal-overlay hidden">
+    <div class="modal">
+        <div class="modal-header">
+            <h2 id="logsTitle">执行记录</h2>
+            <button class="modal-close" onclick="closeLogsModal()">&times;</button>
+        </div>
+        <div class="modal-body" id="logsContainer" style="max-height: 400px; overflow-y: auto;">
+        </div>
+        <div class="modal-footer">
+            <div class="pagination" id="logsPagination" style="width: 100%;"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Method Picker Modal -->
+<div id="methodPickerModal" class="modal-overlay hidden">
+    <div class="modal">
+        <div class="modal-header">
+            <h2>选择执行方法</h2>
+            <button class="modal-close" onclick="closeMethodPicker()">&times;</button>
+        </div>
+        <div class="modal-body" style="max-height:500px;overflow-y:auto;">
+            <div id="methodPickerLoading" style="text-align:center;padding:30px;color:#999;">加载中...</div>
+            <div id="methodPickerList" class="hidden">
+                <div id="methodPickerItems"></div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-ghost" onclick="closeMethodPicker()">取消</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let currentPage = 1;
+    let currentLogPage = 1;
+    let currentLogTaskId = null;
+
+    // ──── Toast ────
+    function showToast(msg, type = 'success') {
+        const el = document.createElement('div');
+        el.className = 'toast ' + type;
+        el.textContent = msg;
+        document.body.appendChild(el);
+        setTimeout(() => el.remove(), 2500);
+    }
+
+    // ──── Task List ────
+    async function loadTasks() {
+        const status = document.getElementById('statusFilter').value;
+        const params = new URLSearchParams({ page: currentPage, size: 20 });
+        if (status) params.set('status', status);
+
+        try {
+            const resp = await fetch('/api/scheduled-task/list?' + params);
+            const data = await resp.json();
+            renderTaskTable(data);
+        } catch (e) {
+            showToast('加载失败: ' + e.message, 'error');
+        }
+    }
+
+    function renderTaskTable(data) {
+        const tbody = document.getElementById('taskTableBody');
+        const records = data.records || [];
+
+        if (records.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="10" class="empty-state"><div class="icon">&#128203;</div><p>暂无任务，点击上方按钮创建</p></td></tr>';
+            document.getElementById('pagination').innerHTML = '';
+            return;
+        }
+
+        tbody.innerHTML = records.map(t => {
+            const statusClass = t.status === 'ACTIVE' ? 'status-active' : 'status-paused';
+            const statusText = t.status === 'ACTIVE' ? '运行中' : '已暂停';
+            const content = t.content ? (t.content.length > 50 ? t.content.substring(0, 50) + '...' : t.content) : '-';
+            const cron = t.cronExpression || '-';
+            const lastExec = t.lastExecuteTime ? formatTime(t.lastExecuteTime) : '-';
+            const nextExec = t.nextExecuteTime ? formatTime(t.nextExecuteTime) : '-';
+
+            return `<tr>
+                <td style="color:#999;">${t.id}</td>
+                <td><strong>${esc(t.name)}</strong></td>
+                <td>${t.methodSignature ? '<span class="method-tag">&#9881; ' + esc(t.methodSignature) + '</span>' : '<span style="color:#ccc;">-</span>'}</td>
+                <td class="content-cell" title="${esc(t.content || '')}">${esc(content)}</td>
+                <td><code style="font-size:12px;color:#888;background:#f5f5f5;padding:2px 6px;border-radius:4px;">${esc(cron)}</code></td>
+                <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                <td style="font-weight:600;">${t.executeCount || 0}</td>
+                <td style="color:#888;font-size:12px;">${lastExec}</td>
+                <td style="color:#888;font-size:12px;">${nextExec}</td>
+                <td>
+                    <div class="actions">
+                        ${t.status === 'ACTIVE'
+                            ? `<button class="btn btn-sm btn-warning" onclick="togglePause(${t.id}, 'pause')">暂停</button>`
+                            : `<button class="btn btn-sm btn-success" onclick="togglePause(${t.id}, 'activate')">启动</button>`}
+                        <button class="btn btn-sm btn-ghost" onclick="executeNow(${t.id})">执行</button>
+                        <button class="btn btn-sm btn-ghost" onclick="openEditModal(${t.id})">编辑</button>
+                        <button class="btn btn-sm btn-ghost" onclick="viewLogs(${t.id})">记录</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteTask(${t.id})">删除</button>
+                    </div>
+                </td>
+            </tr>`;
+        }).join('');
+
+        renderPagination(data.current, data.size, data.total);
+    }
+
+    function renderPagination(current, size, total) {
+        const totalPages = Math.ceil(total / size);
+        const pag = document.getElementById('pagination');
+        if (totalPages <= 1) { pag.innerHTML = `<span>共 ${total} 条</span>`; return; }
+
+        pag.innerHTML = `
+            <button ${current <= 1 ? 'disabled' : ''} onclick="goPage(${current - 1})">&laquo; 上一页</button>
+            <span>第 ${current} / ${totalPages} 页（共 ${total} 条）</span>
+            <button ${current >= totalPages ? 'disabled' : ''} onclick="goPage(${current + 1})">下一页 &raquo;</button>`;
+    }
+
+    function goPage(p) { currentPage = p; loadTasks(); }
+
+    // ──── Create / Edit ────
+    function openCreateModal() {
+        document.getElementById('modalTitle').textContent = '新建任务';
+        document.getElementById('editTaskId').value = '';
+        document.getElementById('taskName').value = '';
+        document.getElementById('taskContent').value = '';
+        document.getElementById('cronExpression').value = '';
+        document.getElementById('methodDisplay').value = '';
+        document.getElementById('methodBeanName').value = '';
+        document.getElementById('methodSignature').value = '';
+        document.getElementById('methodParamsContainer').innerHTML = '';
+        document.getElementById('excludeTimeStart').value = '';
+        document.getElementById('excludeTimeEnd').value = '';
+        document.getElementById('taskModal').classList.remove('hidden');
+    }
+
+    function openEditModal(id) {
+        document.getElementById('modalTitle').textContent = '编辑任务';
+        document.getElementById('editTaskId').value = id;
+        document.getElementById('taskModal').classList.add('hidden');
+
+        fetch('/api/scheduled-task/' + id)
+            .then(r => r.json())
+            .then(data => {
+                const t = data.task;
+                document.getElementById('taskName').value = t.name || '';
+                document.getElementById('taskContent').value = t.content || '';
+                document.getElementById('cronExpression').value = t.cronExpression || '';
+                if (t.methodBeanName && t.methodSignature) {
+                    document.getElementById('methodBeanName').value = t.methodBeanName;
+                    document.getElementById('methodSignature').value = t.methodSignature;
+                    document.getElementById('methodDisplay').value = t.methodSignature;
+                    if (t.methodParams) {
+                        rebuildParamInputsFromTask(t);
+                    }
+                } else {
+                    document.getElementById('methodDisplay').value = '';
+                    document.getElementById('methodBeanName').value = '';
+                    document.getElementById('methodSignature').value = '';
+                    document.getElementById('methodParamsContainer').innerHTML = '';
+                }
+                document.getElementById('excludeTimeStart').value = t.excludeTimeStart || '';
+                document.getElementById('excludeTimeEnd').value = t.excludeTimeEnd || '';
+                document.getElementById('taskModal').classList.remove('hidden');
+            });
+    }
+
+    async function rebuildParamInputsFromTask(task) {
+        // Need to fetch method definition to get param types
+        try {
+            const resp = await fetch('/api/scheduled-task/discover');
+            const data = await resp.json();
+            const methods = data.methods || [];
+            const target = methods.find(m => m.beanName === task.methodBeanName && m.methodName === task.methodSignature);
+            if (target && target.params && target.params.length > 0) {
+                buildParamInputs(target.params, task.methodParams);
+            }
+        } catch (e) {}
+    }
+
+    async function saveTask() {
+        const name = document.getElementById('taskName').value.trim();
+        const content = document.getElementById('taskContent').value.trim();
+        const cron = document.getElementById('cronExpression').value.trim();
+        const editId = document.getElementById('editTaskId').value;
+        const methodBeanName = document.getElementById('methodBeanName').value;
+        const methodSignature = document.getElementById('methodSignature').value;
+
+        if (!name) { showToast('任务名称不能为空', 'error'); return; }
+
+        const methodParams = [];
+        document.querySelectorAll('.param-input').forEach(input => {
+            methodParams.push({
+                name: input.dataset.paramName,
+                value: input.value
+            });
+        });
+
+        const body = { name, content, cronExpression: cron || null };
+        if (methodBeanName && methodSignature) {
+            body.methodBeanName = methodBeanName;
+            body.methodSignature = methodSignature;
+            body.methodParams = JSON.stringify(methodParams);
+        }
+        const excludeStart = document.getElementById('excludeTimeStart').value;
+        const excludeEnd = document.getElementById('excludeTimeEnd').value;
+        if (excludeStart) body.excludeTimeStart = excludeStart;
+        if (excludeEnd) body.excludeTimeEnd = excludeEnd;
+        const url = editId ? '/api/scheduled-task/update' : '/api/scheduled-task/create';
+        if (editId) body.id = parseInt(editId);
+
+        try {
+            const resp = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            const data = await resp.json();
+            if (!resp.ok) { showToast(data.error || '操作失败', 'error'); return; }
+            closeModal();
+            showToast(editId ? '任务已更新' : '任务已创建');
+            loadTasks();
+        } catch (e) {
+            showToast('操作失败: ' + e.message, 'error');
+        }
+    }
+
+    function setCron(expr) { document.getElementById('cronExpression').value = expr; }
+    function closeModal() { document.getElementById('taskModal').classList.add('hidden'); }
+    function clearMethod() {
+        document.getElementById('methodDisplay').value = '';
+        document.getElementById('methodBeanName').value = '';
+        document.getElementById('methodSignature').value = '';
+        document.getElementById('methodParamsContainer').innerHTML = '';
+    }
+    function clearExcludeTime() {
+        document.getElementById('excludeTimeStart').value = '';
+        document.getElementById('excludeTimeEnd').value = '';
+    }
+
+    // ──── Actions ────
+    async function togglePause(id, action) {
+        try {
+            const resp = await fetch('/api/scheduled-task/' + action + '/' + id, { method: 'POST' });
+            const data = await resp.json();
+            if (!resp.ok) { showToast(data.error || '操作失败', 'error'); return; }
+            showToast(data.message);
+            loadTasks();
+        } catch (e) {
+            showToast('操作失败: ' + e.message, 'error');
+        }
+    }
+
+    async function executeNow(id) {
+        try {
+            const resp = await fetch('/api/scheduled-task/execute/' + id, { method: 'POST' });
+            const data = await resp.json();
+            if (!resp.ok) { showToast(data.error || '操作失败', 'error'); return; }
+            showToast('任务已触发执行');
+            loadTasks();
+        } catch (e) {
+            showToast('触发失败: ' + e.message, 'error');
+        }
+    }
+
+    async function deleteTask(id) {
+        if (!confirm('确定删除该任务？执行记录也将一并删除。')) return;
+        try {
+            const resp = await fetch('/api/scheduled-task/delete/' + id, { method: 'POST' });
+            const data = await resp.json();
+            if (!resp.ok) { showToast(data.error || '删除失败', 'error'); return; }
+            showToast('任务已删除');
+            loadTasks();
+        } catch (e) {
+            showToast('删除失败: ' + e.message, 'error');
+        }
+    }
+
+    // ──── Logs ────
+    async function viewLogs(taskId) {
+        currentLogTaskId = taskId;
+        currentLogPage = 1;
+
+        try {
+            const resp = await fetch('/api/scheduled-task/' + taskId);
+            const data = await resp.json();
+            document.getElementById('logsTitle').textContent = '"' + (data.task?.name || '') + '" 执行记录';
+        } catch (e) {}
+
+        loadLogs();
+        document.getElementById('logsModal').classList.remove('hidden');
+    }
+
+    async function loadLogs() {
+        try {
+            const resp = await fetch('/api/scheduled-task/logs/' + currentLogTaskId + '?page=' + currentLogPage + '&size=10');
+            const data = await resp.json();
+            renderLogs(data);
+        } catch (e) {
+            document.getElementById('logsContainer').innerHTML = '<p style="color:#999;text-align:center;">加载失败</p>';
+        }
+    }
+
+    function renderLogs(data) {
+        const container = document.getElementById('logsContainer');
+        const records = data.records || [];
+
+        if (records.length === 0) {
+            container.innerHTML = '<p style="color:#bbb;text-align:center;padding:30px;">暂无执行记录</p>';
+            document.getElementById('logsPagination').innerHTML = '';
+            return;
+        }
+
+        container.innerHTML = records.map(log => {
+            const cls = log.status === 'SUCCESS' ? 'color:#52c41a' : 'color:#ff4d4f';
+            const icon = log.status === 'SUCCESS' ? '&#10003;' : '&#10007;';
+            return `<div class="log-item">
+                <div class="log-time">${formatTime(log.executeTime)}</div>
+                <div class="log-status" style="${cls}">${icon} ${log.status === 'SUCCESS' ? '成功' : '失败'}</div>
+                <div class="log-result">${esc(log.result || '')}</div>
+            </div>`;
+        }).join('');
+
+        const totalPages = Math.ceil(data.total / data.size);
+        const pag = document.getElementById('logsPagination');
+        if (totalPages <= 1) { pag.innerHTML = `<span>共 ${data.total} 条</span>`; return; }
+        pag.innerHTML = `
+            <button ${currentLogPage <= 1 ? 'disabled' : ''} onclick="goLogPage(${currentLogPage - 1})">&laquo;</button>
+            <span>第 ${currentLogPage} / ${totalPages} 页</span>
+            <button ${currentLogPage >= totalPages ? 'disabled' : ''} onclick="goLogPage(${currentLogPage + 1})">&raquo;</button>`;
+    }
+
+    function goLogPage(p) { currentLogPage = p; loadLogs(); }
+    function closeLogsModal() { document.getElementById('logsModal').classList.add('hidden'); }
+
+    // ──── Utilities ────
+    function formatTime(timeStr) {
+        if (!timeStr) return '-';
+        if (Array.isArray(timeStr)) {
+            const [y, mo, d, h, mi, s] = timeStr;
+            return `${y}-${pad(mo)}-${pad(d)} ${pad(h)}:${pad(mi)}:${pad(s)}`;
+        }
+        return timeStr.replace('T', ' ').substring(0, 19);
+    }
+    function pad(n) { return String(n).padStart(2, '0'); }
+    function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+    // ──── Init ────
+    loadTasks();
+
+    // ──── Method Picker ────
+    async function openMethodPicker() {
+        document.getElementById('methodPickerModal').classList.remove('hidden');
+        document.getElementById('methodPickerLoading').classList.remove('hidden');
+        document.getElementById('methodPickerList').classList.add('hidden');
+
+        try {
+            const resp = await fetch('/api/scheduled-task/discover');
+            const data = await resp.json();
+            renderMethodPicker(data.methods || []);
+        } catch (e) {
+            document.getElementById('methodPickerLoading').textContent = '加载失败: ' + e.message;
+        }
+    }
+
+    function renderMethodPicker(methods) {
+        document.getElementById('methodPickerLoading').classList.add('hidden');
+        document.getElementById('methodPickerList').classList.remove('hidden');
+
+        const container = document.getElementById('methodPickerItems');
+        if (methods.length === 0) {
+            container.innerHTML = '<p style="text-align:center;color:#999;padding:30px;">没有发现可定时任务方法</p>';
+            return;
+        }
+
+        container.innerHTML = methods.map(m => {
+            const paramNames = m.params.map(p => p.name).join(', ') || '无参数';
+            return `<div class="method-item" onclick="selectMethod('${esc(m.beanName)}','${esc(m.methodName)}','${esc(m.displayName)}')">
+                <div class="method-name">${esc(m.displayName)}</div>
+                <div class="method-desc">${esc(m.description)}</div>
+                <div class="method-sig">${esc(m.beanName)}#${esc(m.methodName)}(${esc(paramNames)})</div>
+            </div>`;
+        }).join('');
+    }
+
+    async function selectMethod(beanName, methodName, displayName) {
+        document.getElementById('methodBeanName').value = beanName;
+        document.getElementById('methodSignature').value = methodName;
+        document.getElementById('methodDisplay').value = displayName;
+        document.getElementById('methodParamsContainer').innerHTML = '';
+
+        try {
+            const resp = await fetch('/api/scheduled-task/discover');
+            const data = await resp.json();
+            const methods = data.methods || [];
+            const target = methods.find(m => m.beanName === beanName && m.methodName === methodName);
+            if (target && target.params && target.params.length > 0) {
+                buildParamInputs(target.params, '');
+            }
+        } catch (e) {}
+
+        closeMethodPicker();
+    }
+
+    function buildParamInputs(params, valuesJson) {
+        const container = document.getElementById('methodParamsContainer');
+        const values = valuesJson ? JSON.parse(valuesJson) : {};
+
+        container.innerHTML = `<div class="params-card">
+            <div class="params-title">方法参数值</div>
+            ${params.map(p => {
+                const val = values[p.name] || '';
+                let input;
+                const type = (p.type || '').toLowerCase();
+                if (type.includes('boolean')) {
+                    input = `<select class="param-input" data-param-name="${esc(p.name)}">
+                        <option value="true" ${val === 'true' ? 'selected' : ''}>true</option>
+                        <option value="false" ${val === 'false' || !val ? 'selected' : ''}>false</option>
+                    </select>`;
+                } else if (type.includes('integer') || type.includes('int') || type.includes('long')) {
+                    input = `<input type="number" class="param-input" data-param-name="${esc(p.name)}" value="${esc(val)}">`;
+                } else if (type.includes('string')) {
+                    input = `<textarea class="param-input" data-param-name="${esc(p.name)}" placeholder="${esc(p.name)}">${esc(val)}</textarea>`;
+                } else {
+                    input = `<input type="text" class="param-input" data-param-name="${esc(p.name)}" placeholder="${esc(p.type)}" value="${esc(val)}">`;
+                }
+                return `<div class="param-group">
+                    <label>${esc(p.name)}<span class="type-badge">${esc(p.type)}</span></label>
+                    ${input}
+                </div>`;
+            }).join('')}
+        </div>`;
+    }
+
+    function closeMethodPicker() { document.getElementById('methodPickerModal').classList.add('hidden'); }
+</script>
+</body>
+</html>

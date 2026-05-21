@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>订单管理系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: "Microsoft YaHei", "SimHei", sans-serif;
+        }
+        body {
+            background-color: #f5f5f5;
+        }
+        /* 顶部导航栏 */
+        .top-nav {
+            background-color: #008844;
+            color: white;
+            display: flex;
+            align-items: center;
+            padding: 8px 12px;
+            gap: 12px;
+            font-size: 14px;
+        }
+        .nav-item {
+            padding: 4px 8px;
+            cursor: pointer;
+            border-radius: 3px;
+        }
+        .nav-item.active {
+            background-color: #006633;
+            font-weight: bold;
+        }
+        .nav-right {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .search-hint {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+        .icon-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        /* 筛选栏 */
+        .filter-bar {
+            background-color: white;
+            padding: 8px 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border-bottom: 1px solid #ddd;
+        }
+        .filter-btn {
+            padding: 4px 10px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            background-color: white;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .filter-btn.active {
+            background-color: #008844;
+            color: white;
+            border-color: #008844;
+        }
+        .badge {
+            background-color: #ff4444;
+            color: white;
+            border-radius: 10px;
+            padding: 1px 5px;
+            font-size: 11px;
+            margin-left: 3px;
+        }
+        .filter-divider {
+            width: 1px;
+            height: 20px;
+            background-color: #ccc;
+            margin: 0 8px;
+        }
+
+        /* 工具栏 */
+        .toolbar {
+            background-color: white;
+            padding: 6px 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border-bottom: 1px solid #ddd;
+            font-size: 12px;
+        }
+        .toolbar input[type="checkbox"] {
+            margin-right: 4px;
+        }
+        .toolbar input[type="date"] {
+            padding: 2px 4px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+        }
+        .toolbar-btn {
+            background-color: #eee;
+            border: 1px solid #ccc;
+            padding: 3px 8px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .toolbar-btn:hover {
+            background-color: #ddd;
+        }
+
+        /* 表格容器 */
+        .table-container {
+            margin: 8px;
+            background-color: white;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            overflow-x: auto;
+        }
+        table {
+            width: max-content;
+            min-width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        th, td {
+            padding: 8px 6px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+            white-space: nowrap;
+        }
+        th {
+            background-color: #008844;
+            color: white;
+            font-weight: normal;
+            position: sticky;
+            top: 0;
+        }
+        tr:nth-child(even) {
+            background-color: #fafafa;
+        }
+        tr:hover {
+            background-color: #e8f5e9;
+        }
+        .status-tag {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 11px;
+        }
+        .status-tag.gray {
+            background-color: #eee;
+            color: #333;
+        }
+        .status-tag.green {
+            background-color: #e8f5e9;
+            color: #008844;
+        }
+        .checkbox-col {
+            width: 30px;
+            text-align: center;
+        }
+        .btn-col {
+            width: 60px;
+        }
+        .fba-tag {
+            color: #666;
+            font-size: 11px;
+        }
+
+        /* 右侧悬浮按钮 */
+        .float-btn {
+            position: fixed;
+            right: 20px;
+            bottom: 20px;
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            background-color: #888;
+            color: white;
+            border: none;
+            font-size: 18px;
+            cursor: pointer;
+            z-index: 999;
+        }
+
+        /* 遮罩层 */
+        .overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+        }
+        .overlay.active {
+            display: block;
+        }
+
+        /* 侧滑面板 */
+        .slide-panel {
+            position: fixed;
+            top: 0;
+            right: -50%;
+            width: 50%;
+            height: 100%;
+            background-color: white;
+            z-index: 1001;
+            transition: right 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            box-shadow: -3px 0 10px rgba(0,0,0,0.2);
+        }
+        .slide-panel.active {
+            right: 0;
+        }
+
+        /* 面板头部 */
+        .panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 15px 20px;
+            background-color: #008844;
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        .panel-close {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0 5px;
+        }
+        .panel-close:hover {
+            opacity: 0.7;
+        }
+
+        /* 面板内容 */
+        .panel-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+        .detail-section {
+            margin-bottom: 20px;
+        }
+        .detail-section h3 {
+            font-size: 14px;
+            color: #333;
+            border-bottom: 2px solid #008844;
+            padding-bottom: 8px;
+            margin-bottom: 12px;
+        }
+        .detail-row {
+            display: flex;
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+            font-size: 13px;
+        }
+        .detail-label {
+            width: 120px;
+            color: #666;
+            flex-shrink: 0;
+        }
+        .detail-value {
+            flex: 1;
+            color: #333;
+        }
+        .timeline {
+            position: relative;
+            padding-left: 20px;
+        }
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 6px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background-color: #ddd;
+        }
+        .timeline-item {
+            position: relative;
+            padding: 10px 0 10px 15px;
+        }
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -17px;
+            top: 14px;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: #008844;
+            border: 2px solid white;
+        }
+        .timeline-item:first-child::before {
+            background-color: #ff4444;
+        }
+        .timeline-time {
+            font-size: 12px;
+            color: #999;
+        }
+        .timeline-content {
+            font-size: 13px;
+            color: #333;
+            margin-top: 4px;
+        }
+
+        /* 客户单号可点击样式 */
+        .clickable-order {
+            color: #008844;
+            cursor: pointer;
+            text-decoration: underline;
+        }
+        .clickable-order:hover {
+            color: #006633;
+        }
+    </style>
+</head>
+<body>
+<!-- 顶部导航栏 -->
+<div class="top-nav">
+    <span class="nav-item">收货</span>
+    <span class="nav-item">打单</span>
+    <span class="nav-item">预报</span>
+    <span class="nav-item">问题处理</span>
+    <span class="nav-item">航运输询</span>
+    <span class="nav-item">邮政查询</span>
+    <span class="nav-item">黑名单查询</span>
+    <span class="nav-item">文档中心</span>
+    <span class="nav-item active">升级打标</span>
+    <div class="nav-right">
+        <span class="search-hint">搜索历史 <span style="color: #ffd;">shift+enter可快捷查询</span></span>
+        <button class="icon-btn">查找</button>
+        <button class="icon-btn">清空</button>
+    </div>
+</div>
+
+<!-- 筛选栏 -->
+<div class="filter-bar">
+    <button class="filter-btn">草稿 <span class="badge">4</span></button>
+    <button class="filter-btn">已预报 <span class="badge">47</span></button>
+    <button class="filter-btn">待收货 <span class="badge">0</span></button>
+    <button class="filter-btn active">全部</button>
+    <button class="filter-btn">待排货 <span class="badge">32</span></button>
+    <button class="filter-btn">待发货 <span class="badge">41</span></button>
+    <button class="filter-btn">待上网 <span class="badge">43</span></button>
+    <button class="filter-btn">待签收 <span class="badge" style="background-color: #008844;">1723</span></button>
+    <button class="filter-btn">待退货 <span class="badge" style="background-color: #6699ff;">614</span></button>
+    <div class="filter-divider"></div>
+    <button class="filter-btn">问题件 <span class="badge" style="background-color: #ff8800;">1840</span></button>
+    <button class="filter-btn">滞留件 <span class="badge">0</span></button>
+</div>
+
+<!-- 工具栏 -->
+<div class="toolbar">
+    <label><input type="checkbox"> 分享</label>
+    <input type="date" value="2026-05-11"> - <input type="date" value="2026-05-11">
+    <button class="toolbar-btn">×</button>
+    <button class="toolbar-btn">操作栏</button>
+</div>
+
+<!-- 表格区域 -->
+<div class="table-container">
+    <table>
+        <thead>
+        <tr>
+            <th class="checkbox-col"><input type="checkbox"></th>
+            <th></th>
+            <th>操作栏</th>
+            <th>收货备注</th>
+            <th>最新公开轨迹</th>
+            <th>17单号</th>
+            <th>转单号</th>
+            <th>客户编号</th>
+            <th>客户单号</th>
+            <th>件数</th>
+            <th>FBA入仓单号</th>
+            <th>收货渠道</th>
+            <th>收货计量重</th>
+            <th>方数</th>
+            <th>收货实重</th>
+            <th>收货材积重</th>
+            <th>发货渠道</th>
+            <th>代理编号</th>
+            <th>偏远</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr>
+            <td><input type="checkbox"></td>
+            <td>已发</td>
+            <td>2026/05/11 16:58:33</td>
+            <td>待发货 YL大陆 XJE1 耳机 转接头 收香港走大陆</td>
+            <td><span class="status-tag green">资料审核通过</span></td>
+            <td></td>
+            <td></td>
+            <td>H0344</td>
+            <td><span class="clickable-order" onclick="openOrderDetail('2202234125')">2202234125</span></td>
+            <td>3</td>
+            <td>FBA15G9AJVND0-联邦通D498</td>
+            <td>空派包税-香港</td>
+            <td>43.000</td>
+            <td>0.18810</td>
+            <td>42.600</td>
+            <td>31.350</td>
+            <td>日本空运FBA</td>
+            <td>J000366</td>
+            <td>M</td>
+        </tr>
+        <tr>
+            <td><input type="checkbox"></td>
+            <td>已发</td>
+            <td>2026/05/11 16:58:21</td>
+            <td>待上网 HN；9810报关 XJE2 皂液器</td>
+            <td><span class="status-tag gray">发货出库</span></td>
+            <td></td>
+            <td></td>
+            <td>H0641</td>
+            <td><span class="clickable-order" onclick="openOrderDetail('2202234147')">2202234147</span></td>
+            <td>11</td>
+            <td>FBA15G8B607W-6739</td>
+            <td>空派包税-大陆</td>
+            <td>159.000</td>
+            <td>0.84498</td>
+            <td>159.000</td>
+            <td>140.831</td>
+            <td>日本空运FBA</td>
+            <td>J000366</td>
+            <td>M</td>
+        </tr>
+        <tr>
+            <td><input type="checkbox"></td>
+            <td>已发</td>
+            <td>2026/05/11 16:58:21</td>
+            <td>待上网 HN XHD4 摄像头</td>
+            <td><span class="status-tag gray">发货出库</span></td>
+            <td></td>
+            <td></td>
+            <td>H0642</td>
+            <td><span class="clickable-order" onclick="openOrderDetail('2202234143')">2202234143</span></td>
+            <td>1</td>
+            <td>FBA15G9K1FHY-6825</td>
+            <td>空派包税-大陆</td>
+            <td>10.000</td>
+            <td>0.05331</td>
+            <td>9.800</td>
+            <td>8.885</td>
+            <td>日本空运FBA</td>
+            <td>J000366</td>
+            <td>M</td>
+        </tr>
+        <tr>
+            <td><input type="checkbox"></td>
+            <td>已发</td>
+            <td>2026/05/11 15:21:31</td>
+            <td>待排货 鼠标垫键盘保护膜电脑屏幕保护膜椅子腿保护套支架垫片10个装塑料抽层布基双面胶；自己装 只做到港 YL</td>
+            <td><span class="status-tag green">资料审核通过</span></td>
+            <td></td>
+            <td></td>
+            <td>H1041</td>
+            <td><span class="clickable-order" onclick="openOrderDetail('0415G9JKYZ')">0415G9JKYZ</span></td>
+            <td>13</td>
+            <td>FBA15G9JKYZD</td>
+            <td>包税普船-海运</td>
+            <td>317.000</td>
+            <td>1.09535</td>
+            <td>317.000</td>
+            <td>182.560</td>
+            <td>日本空运FBA</td>
+            <td>J000366</td>
+            <td>M</td>
+        </tr>
+        <tr>
+            <td><input type="checkbox"></td>
+            <td>已发</td>
+            <td>2026/05/11 16:15:39</td>
+            <td>待发货</td>
+            <td><span class="status-tag green">资料审核通过</span></td>
+            <td></td>
+            <td></td>
+            <td>H0327</td>
+            <td><span class="clickable-order" onclick="openOrderDetail('2202234100')">2202234100</span></td>
+            <td>20</td>
+            <td></td>
+            <td>海运商业件-快船</td>
+            <td>270.000</td>
+            <td>1.20380</td>
+            <td>270.000</td>
+            <td>200.640</td>
+            <td>日本空运FBA</td>
+            <td>J000366</td>
+            <td>M</td>
+        </tr>
+        <tr>
+            <td><input type="checkbox"></td>
+            <td>已发</td>
+            <td>2026/05/11 15:21:31</td>
+            <td>待排货 布基双面胶；自己装 只做到港 YL清关</td>
+            <td><span class="status-tag green">资料审核通过</span></td>
+            <td></td>
+            <td></td>
+            <td>H1042</td>
+            <td><span class="clickable-order" onclick="openOrderDetail('0415G9P5B9')">0415G9P5B9</span></td>
+            <td>7</td>
+            <td>FBA15G9P5B99</td>
+            <td>包税普船-海运</td>
+            <td>144.000</td>
+            <td>0.28469</td>
+            <td>144.000</td>
+            <td>47.453</td>
+            <td>日本空运FBA</td>
+            <td>J000366</td>
+            <td>M</td>
+        </tr>
+        <tr>
+            <td><input type="checkbox"></td>
+            <td>已发</td>
+            <td>2026/05/11 16:32:21</td>
+            <td>待排货 大陆 1.7方 自己装 uv板等252个售价2288日币，售价申报：576576日币</td>
+            <td><span class="status-tag green">资料审核通过</span></td>
+            <td></td>
+            <td></td>
+            <td>N0009</td>
+            <td><span class="clickable-order" onclick="openOrderDetail('6661111223')">6661111223</span></td>
+            <td>151</td>
+            <td></td>
+            <td>包税普船-海运</td>
+            <td>2771.000</td>
+            <td>13.93227</td>
+            <td>2770.850</td>
+            <td>2322.006</td>
+            <td>日本空运FBA</td>
+            <td>J000366</td>
+            <td>M</td>
+        </tr>
+        <tr>
+            <td><input type="checkbox"></td>
+            <td>已发</td>
+            <td>2026/05/11 09:11:53</td>
+            <td>待排货 XH2605818681+XH2605721352 合计计费1.7方，自己装，uv板等252个售价2288日币，售价申报：576576日币</td>
+            <td><span class="status-tag green">资料审核通过</span></td>
+            <td></td>
+            <td></td>
+            <td>H1014</td>
+            <td><span class="clickable-order" onclick="openOrderDetail('XH2605818681')">XH2605818681</span></td>
+            <td>18</td>
+            <td>FBA15G9TLZXG</td>
+            <td>自税派-整清普船</td>
+            <td>0.640</td>
+            <td>0.51804</td>
+            <td>190.800</td>
+            <td>86.346</td>
+            <td>日本空运FBA</td>
+            <td>J000366</td>
+            <td>M</td>
+        </tr>
+        <tr>
+            <td><input type="checkbox"></td>
+            <td>已发</td>
+            <td>2026/05/11 17:38:23</td>
+            <td>待发货 XJE2 布料切割工具配件 丝锥扳手模头工具 螺丝安装拆卸工具角磨机扳手 床单固定工具 木工半圆浮雕工具</td>
+            <td><span class="status-tag green">资料审核通过</span></td>
+            <td></td>
+            <td></td>
+            <td>H0318</td>
+            <td><span class="clickable-order" onclick="openOrderDetail('2202234102')">2202234102</span></td>
+            <td>1</td>
+            <td>FBA15G9ZVLJ44-LJ44</td>
+            <td>空派包税-大陆</td>
+            <td>17.000</td>
+            <td>0.03441</td>
+            <td>16.800</td>
+            <td>5.735</td>
+            <td>日本空运FBA</td>
+            <td>J000366</td>
+            <td>M</td>
+        </tr>
+        <tr>
+            <td><input type="checkbox"></td>
+            <td>已发</td>
+            <td>2026/05/11 16:58:21</td>
+            <td>待上网 HN 私人地址 游戏机收纳盒 相机保护壳</td>
+            <td><span class="status-tag gray">发货出库</span></td>
+            <td></td>
+            <td></td>
+            <td>H0342</td>
+            <td><span class="clickable-order" onclick="openOrderDetail('2202234124')">2202234124</span></td>
+            <td>1</td>
+            <td></td>
+            <td>空派包税-大陆</td>
+            <td>13.500</td>
+            <td>0.08000</td>
+            <td>11.000</td>
+            <td>13.333</td>
+            <td>日本空运FBA</td>
+            <td>J000366</td>
+            <td>M</td>
+        </tr>
+        <tr>
+            <td><input type="checkbox"></td>
+            <td>已发</td>
+            <td>2026/05/11 16:58:21</td>
+            <td>待上网 HN；9810报关 XJW1 皂液器</td>
+            <td><span class="status-tag gray">发货出库</span></td>
+            <td></td>
+            <td></td>
+            <td>H0643</td>
+            <td><span class="clickable-order" onclick="openOrderDetail('2202234148')">2202234148</span></td>
+            <td>4</td>
+            <td>FBA15G8TLNN2-6738</td>
+            <td>空派包税-大陆</td>
+            <td>59.000</td>
+            <td>0.35270</td>
+            <td>57.600</td>
+            <td>58.784</td>
+            <td>日本空运FBA</td>
+            <td>J000366</td>
+            <td>M</td>
+        </tr>
+        <tr>
+            <td><input type="checkbox"></td>
+            <td>已发</td>
+            <td>2026/05/11 16:58:33</td>
+            <td>待发货 YL XHD4 摄像头</td>
+            <td><span class="status-tag green">资料审核通过</span></td>
+            <td></td>
+            <td></td>
+            <td>H0777</td>
+            <td><span class="clickable-order" onclick="openOrderDetail('2202234149')">2202234149</span></td>
+            <td>2</td>
+            <td>FBA15G9CRY38-Y38</td>
+            <td>空派包税-香港</td>
+            <td>36.000</td>
+            <td>0.12480</td>
+            <td>35.800</td>
+            <td>20.800</td>
+            <td>日本空运FBA</td>
+            <td>J000366</td>
+            <td>M</td>
+        </tr>
+        <tr>
+            <td><input type="checkbox"></td>
+            <td></td>
+            <td>2026/05/11 14:14:07</td>
+            <td>待发货</td>
+            <td><span class="status-tag green">资料审核通过</span></td>
+            <td></td>
+            <td></td>
+            <td>H0435</td>
+            <td><span class="clickable-order" onclick="openOrderDetail('2202234132')">2202234132</span></td>
+            <td>5</td>
+            <td>9TV</td>
+            <td>贴标围税-普船</td>
+            <td>0.370</td>
+            <td>0.36035</td>
+            <td>76.800</td>
+            <td>60.060</td>
+            <td>日本空运FBA</td>
+            <td>J000366</td>
+            <td>M</td>
+        </tr>
+        <tr>
+            <td><input type="checkbox"></td>
+            <td></td>
+            <td>2026/05/11 16:58:21</td>
+            <td>待上网 HN韩国 XJE1 夜光灯 点击器 秒表 温湿度计 台灯 服装专用高温消失笔 螺丝刀套装 套筒 高尔夫划线器 留痕贴纸</td>
+            <td><span class="status-tag gray">发货出库</span></td>
+            <td></td>
+            <td></td>
+            <td>H0093</td>
+            <td><span class="clickable-order" onclick="openOrderDetail('2202234095')">2202234095</span></td>
+            <td>1</td>
+            <td>FBA15G8BF72F8-2F8</td>
+            <td>空派包税-香港</td>
+            <td>14.000</td>
+            <td>0.08118</td>
+            <td>12.800</td>
+            <td>13.530</td>
+            <td>日本空运FBA</td>
+            <td>J000366</td>
+            <td>M</td>
+        </tr>
+        <tr>
+            <td><input type="checkbox"></td>
+            <td></td>
+            <td>2026/05/11 17:38:23</td>
+            <td>待发货 XJE1 挂包 文件夹 洗衣袋 冷裱膜 保护套 卡扣；外配SL</td>
+            <td><span class="status-tag green">资料审核通过</span></td>
+            <td></td>
+            <td></td>
+            <td>H0094</td>
+            <td><span class="clickable-order" onclick="openOrderDetail('2202234116')">2202234116</span></td>
+            <td>1</td>
+            <td>FBA15G9ZKF04-JYM0322-F04</td>
+            <td>空派包税-大陆</td>
+            <td>13.000</td>
+            <td>0.05692</td>
+            <td>12.600</td>
+            <td>9.486</td>
+            <td>日本空运FBA</td>
+            <td>J000366</td>
+            <td>M</td>
+        </tr>
+        <tr>
+            <td><input type="checkbox"></td>
+            <td></td>
+            <td>2026/05/11 15:21:39</td>
+            <td>待上网 BHD</td>
+            <td><span class="status-tag gray">离开扫描</span></td>
+            <td></td>
+            <td></td>
+            <td>H0369</td>
+            <td><span class="clickable-order" onclick="openOrderDetail('359283058853')">359283058853</span></td>
+            <td>1</td>
+            <td>联美通4154</td>
+            <td>H仓川小包-香港</td>
+            <td>0.500</td>
+            <td>0.00071</td>
+            <td>0.100</td>
+            <td>0.119</td>
+            <td>JP小包带电</td>
+            <td>J000432</td>
+            <td>M</td>
+        </tr>
+        <tr>
+            <td><input type="checkbox"></td>
+            <td></td>
+            <td>2026/05/11 14:14:07</td>
+            <td>待发货</td>
+            <td><span class="status-tag green">资料审核通过</span></td>
+            <td></td>
+            <td></td>
+            <td>H0831</td>
+            <td><span class="clickable-order" onclick="openOrderDetail('2202234120')">2202234120</span></td>
+            <td>6</td>
+            <td></td>
+            <td>包税快船-海运</td>
+            <td>99.000</td>
+            <td>0.58458</td>
+            <td>99.000</td>
+            <td>97.428</td>
+            <td>日本空运FBA</td>
+            <td>J000366</td>
+            <td>M</td>
+        </tr>
+        <tr>
+            <td><input type="checkbox"></td>
+            <td></td>
+            <td>2026/05/11 16:27:33</td>
+            <td>待发货</td>
+            <td><span class="status-tag green">资料审核通过</span></td>
+            <td></td>
+            <td></td>
+            <td>H1075</td>
+            <td><span class="clickable-order" onclick="openOrderDetail('2202234163')">2202234163</span></td>
+            <td>19</td>
+            <td>YF0022-N77</td>
+            <td>贴标围税-普船</td>
+            <td>1.030</td>
+            <td>1.02793</td>
+            <td>296.000</td>
+            <td>171.312</td>
+            <td>日本空运FBA</td>
+            <td>J000366</td>
+            <td>M</td>
+        </tr>
+        <tr>
+            <td><input type="checkbox"></td>
+            <td></td>
+            <td>2026/05/11 10:13:59</td>
+            <td>待上网 YS</td>
+            <td><span class="status-tag gray">发货出库</span></td>
+            <td>SZTB260500326</td>
+            <td></td>
+            <td>H0095</td>
+            <td><span class="clickable-order" onclick="openOrderDetail('2202234090')">2202234090</span></td>
+            <td>39</td>
+            <td>FBA15G8JVFZ9FZ9</td>
+            <td>贴标围税-普船</td>
+            <td>876.000</td>
+            <td>5.25447</td>
+            <td>608.400</td>
+            <td>876.000</td>
+            <td>日本空运FBA</td>
+            <td>J000366</td>
+            <td>M</td>
+        </tr>
+        </tbody>
+    </table>
+</div>
+
+<!-- 右侧悬浮按钮 -->
+<button class="float-btn">&gt;</button>
+
+<!-- 遮罩层 -->
+<div class="overlay" id="overlay" onclick="closeOrderDetail()"></div>
+
+<!-- 侧滑面板 -->
+<div class="slide-panel" id="slidePanel">
+    <div class="panel-header">
+        <span id="panelTitle">订单详情</span>
+        <button class="panel-close" onclick="closeOrderDetail()">&times;</button>
+    </div>
+    <div class="panel-body" id="panelBody">
+        <!-- 动态内容 -->
+    </div>
+</div>
+
+<script>
+function openOrderDetail(orderNo) {
+    document.getElementById('panelTitle').textContent = '订单详情 - ' + orderNo;
+    document.getElementById('panelBody').innerHTML = generateOrderDetail(orderNo);
+    document.getElementById('overlay').classList.add('active');
+    document.getElementById('slidePanel').classList.add('active');
+}
+
+function closeOrderDetail() {
+    document.getElementById('overlay').classList.remove('active');
+    document.getElementById('slidePanel').classList.remove('active');
+}
+
+function generateOrderDetail(orderNo) {
+    const channels = ['空派包税-大陆', '空派包税-香港', '包税普船-海运', '海运商业件-快船', '自税派-整清普船', '贴标围税-普船', '包税快船-海运'];
+    const products = ['蓝牙耳机', '手机壳', 'USB数据线', '智能手表', '无线充电器', '平板电脑支架', 'LED台灯', '运动手环', '蓝牙音箱', '车载充电器'];
+    const customers = ['张三', '李四', '王五', '赵六', '陈七', '刘八', '周九', '吴十'];
+    const statuses = ['待发货', '运输中', '已到达', '清关中', '派送中', '已签收'];
+    const weights = (Math.random() * 50 + 5).toFixed(3);
+    const volume = (Math.random() * 2 + 0.1).toFixed(5);
+    const pieces = Math.floor(Math.random() * 20 + 1);
+    const channel = channels[Math.floor(Math.random() * channels.length)];
+    const product = products[Math.floor(Math.random() * products.length)];
+    const customer = customers[Math.floor(Math.random() * customers.length)];
+    const status = statuses[Math.floor(Math.random() * statuses.length)];
+
+    const today = new Date();
+    const dates = [];
+    for (let i = 3; i >= 0; i--) {
+        const d = new Date(today);
+        d.setDate(d.getDate() - i);
+        dates.push(d.toISOString().split('T')[0]);
+    }
+
+    return `
+        <div class="detail-section">
+            <h3>基本信息</h3>
+            <div class="detail-row">
+                <span class="detail-label">客户单号</span>
+                <span class="detail-value">${orderNo}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">客户名称</span>
+                <span class="detail-value">${customer}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">当前状态</span>
+                <span class="detail-value">${status}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">发货渠道</span>
+                <span class="detail-value">${channel}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">商品名称</span>
+                <span class="detail-value">${product}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">件数</span>
+                <span class="detail-value">${pieces}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">重量(kg)</span>
+                <span class="detail-value">${weights}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">体积(m³)</span>
+                <span class="detail-value">${volume}</span>
+            </div>
+        </div>
+
+        <div class="detail-section">
+            <h3>物流轨迹</h3>
+            <div class="timeline">
+                <div class="timeline-item">
+                    <div class="timeline-time">${dates[3]} 14:32:18</div>
+                    <div class="timeline-content">包裹已签收，签收人：前台代收</div>
+                </div>
+                <div class="timeline-item">
+                    <div class="timeline-time">${dates[2]} 09:15:42</div>
+                    <div class="timeline-content">到达目的地国家，清关中</div>
+                </div>
+                <div class="timeline-item">
+                    <div class="timeline-time">${dates[1]} 22:08:55</div>
+                    <div class="timeline-content">航班已起飞，预计3天后到达</div>
+                </div>
+                <div class="timeline-item">
+                    <div class="timeline-time">${dates[0]} 10:45:03</div>
+                    <div class="timeline-content">卖家已发货，等待揽收</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="detail-section">
+            <h3>费用信息</h3>
+            <div class="detail-row">
+                <span class="detail-label">运费</span>
+                <span class="detail-value">¥${(Math.random() * 500 + 100).toFixed(2)}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">关税</span>
+                <span class="detail-value">¥${(Math.random() * 200 + 20).toFixed(2)}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">其他费用</span>
+                <span class="detail-value">¥${(Math.random() * 50 + 5).toFixed(2)}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">总计</span>
+                <span class="detail-value" style="color:#008844;font-weight:bold;">¥${(Math.random() * 700 + 150).toFixed(2)}</span>
+            </div>
+        </div>
+    `;
+}
+
+// ESC 键关闭面板
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeOrderDetail();
+    }
+});
+</script>
+</body>
+</html>

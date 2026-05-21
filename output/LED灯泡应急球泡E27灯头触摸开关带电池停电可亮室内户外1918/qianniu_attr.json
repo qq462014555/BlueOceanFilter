@@ -1,0 +1,121 @@
+{
+  "extractedAt" : "2026-05-16T19:59:38.253435100",
+  "sourceUrl" : "https://item.upload.taobao.com/sell/v2/publish.htm?catId=50022652&gpfRenderTrace=213e03c117789309669346924e0d82&fromAICategory=true&keyProps=%7B%22p-20000%22%3A%7B%22value%22%3A3246379%2C%22text%22%3A%22%E6%97%A0%E5%93%81%E7%89%8C%22%7D%2C%22p-20000%7E1%22%3A%22HV-869230%22%7D&fromAIPublish=true&newRouter=1&paramCacheId=merge_router_cache_2213929835378_1778931001663_849&x-gpf-submit-trace-id=213e03c117789310016296716e0d82",
+  "title" : "LED灯泡应急球泡E27灯头触摸开关带电池停电可亮室内户外1918",
+  "fieldCount" : 19,
+  "fields" : [ {
+    "label" : "品牌",
+    "type" : "select",
+    "required" : true,
+    "options" : [ ],
+    "currentValue" : "无品牌"
+  }, {
+    "label" : "型号",
+    "type" : "input",
+    "required" : true,
+    "options" : [ ],
+    "currentValue" : "HV-869230"
+  }, {
+    "label" : "灯头接口（灯头型号）",
+    "type" : "checkbox",
+    "required" : false,
+    "options" : [ "G53", "E12", "E14", "E17", "E27", "e40", "GU5.3", "GU10", "G4", "G8", "G9", "B15", "B22", "MR11", "MR16", "T管", "T4", "T5", "T8", "T9", "T10", "T12", "2G7", "2G11", "G24D-1", "G24d-2", "G24d-3", "G24q-1", "G24q-2", "G24q-3", "G10C", "G13", "E10" ],
+    "currentValue" : ""
+  }, {
+    "label" : "功能",
+    "type" : "select",
+    "required" : false,
+    "options" : [ "光色均匀", "可调光", "抗频闪", "护眼", "散热性强", "耐用", "节能", "防爆", "防蚊虫" ],
+    "currentValue" : ""
+  }, {
+    "label" : "照射面积",
+    "type" : "measurement",
+    "required" : false,
+    "options" : [ ],
+    "currentValue" : ""
+  }, {
+    "label" : "产地",
+    "type" : "select",
+    "required" : true,
+    "options" : [ "中国大陆", "亚太", "其他海外地区", "日本", "欧洲", "港澳台地区", "美国", "韩国" ],
+    "currentValue" : ""
+  }, {
+    "label" : "材质",
+    "type" : "select",
+    "required" : false,
+    "options" : [ "PC", "塑料", "有机玻璃", "铝" ],
+    "currentValue" : ""
+  }, {
+    "label" : "电压",
+    "type" : "measurement",
+    "required" : false,
+    "options" : [ ],
+    "currentValue" : ""
+  }, {
+    "label" : "防护等级",
+    "type" : "select",
+    "required" : false,
+    "options" : [ "IP20", "IP23", "IP30", "IP33", "IP40", "IP42", "IP44", "IP54", "IP55", "IP65", "IP66", "IP67", "IP68" ],
+    "currentValue" : ""
+  }, {
+    "label" : "光通量",
+    "type" : "measurement",
+    "required" : false,
+    "options" : [ ],
+    "currentValue" : ""
+  }, {
+    "label" : "环保认证",
+    "type" : "select",
+    "required" : false,
+    "options" : [ "CB认证", "CE认证", "CQC认证", "DLC认证", "ENEC认证", "ERP认证", "EU 1194/2012能效标准", "Energy Star认证", "GS认证", "IEC 62612性能检测", "LM-79测试", "LM-80测试", "RoHS认证", "UL/ETL认证", "WEEE指令", "中国RoHS", "中国能效标识", "加州65认证" ],
+    "currentValue" : ""
+  }, {
+    "label" : "控制方式",
+    "type" : "checkbox",
+    "required" : false,
+    "options" : [ "光控", "声控", "语音控制", "遥控控制", "APP控制", "智能开关控制", "非智能控制" ],
+    "currentValue" : ""
+  }, {
+    "label" : "蓝光危害等级",
+    "type" : "select",
+    "required" : false,
+    "options" : [ "RG0", "RG1", "RG2", "RG3" ],
+    "currentValue" : ""
+  }, {
+    "label" : "能效备案号",
+    "type" : "input",
+    "required" : false,
+    "options" : [ ],
+    "currentValue" : ""
+  }, {
+    "label" : "能效等级",
+    "type" : "select",
+    "required" : false,
+    "options" : [ "一级", "三级", "二级", "五级", "四级", "无能效等级" ],
+    "currentValue" : ""
+  }, {
+    "label" : "是否防水",
+    "type" : "select",
+    "required" : false,
+    "options" : [ "不防水" ],
+    "currentValue" : ""
+  }, {
+    "label" : "适用对象",
+    "type" : "checkbox",
+    "required" : false,
+    "options" : [ "交通照明", "室内", "景观照明", "手电筒", "特殊照明" ],
+    "currentValue" : ""
+  }, {
+    "label" : "显色指数",
+    "type" : "select",
+    "required" : false,
+    "options" : [ "Ra80-85", "Ra85-90", "Ra90-95", "Ra＞95" ],
+    "currentValue" : ""
+  }, {
+    "label" : "质保年限",
+    "type" : "measurement",
+    "required" : false,
+    "options" : [ ],
+    "currentValue" : ""
+  } ]
+}

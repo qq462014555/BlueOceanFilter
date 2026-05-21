@@ -1,0 +1,14 @@
+com\blueocean\taobao\service\SxkcScraper$ShopRow.class
+com\blueocean\taobao\service\SxkcScraper.class
+com\blueocean\taobao\service\SxkcScraper$PlanRow.class
+com\blueocean\taobao\entity\TaobaoShop.class
+com\blueocean\taobao\mapper\TaobaoAdRecordMapper.class
+com\blueocean\taobao\service\SxkcScraper$ScrapeResult.class
+com\blueocean\taobao\config\TaobaoChromeConfig.class
+com\blueocean\taobao\util\ChromeLauncher.class
+com\blueocean\taobao\util\EmailUtil.class
+com\blueocean\taobao\controller\TaobaoAdMonitorController.class
+com\blueocean\taobao\entity\TaobaoAdRecord.class
+com\blueocean\taobao\service\TaobaoAdSyncService.class
+com\blueocean\taobao\service\SxkcScraper$ShopDetailResult.class
+com\blueocean\taobao\mapper\TaobaoShopMapper.class

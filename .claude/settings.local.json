@@ -44,7 +44,10 @@
       "Read(//c/chrome-debug-merchant/**)",
       "Bash(iconv -f GBK -t UTF-8)",
       "Bash(mvn dependency:tree -Dincludes=com.microsoft.playwright)",
-      "Bash(mvnw.cmd clean *)"
+      "Bash(mvnw.cmd clean *)",
+      "Bash(/taskkill /PID 55052 /F)",
+      "Bash(kill -9 55052)",
+      "Bash(powershell *)"
     ]
   }
 }

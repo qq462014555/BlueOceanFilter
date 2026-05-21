@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文件管理 - 蓝海词筛选系统</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; min-height: 100vh; }
+        .container { max-width: 1100px; margin: 0 auto; padding: 40px 20px; }
+        h1 { text-align: center; color: #1a1a2e; margin-bottom: 30px; font-size: 28px; }
+
+        .nav-bar { display: flex; gap: 12px; margin-bottom: 30px; justify-content: center; }
+        .nav-bar a { padding: 10px 24px; background: #fff; color: #1890ff; border: 2px solid #1890ff; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 600; transition: all 0.2s; }
+        .nav-bar a:hover { background: #1890ff; color: #fff; }
+        .nav-bar a.active { background: #1890ff; color: #fff; }
+
+        .explorer { background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); overflow: hidden; }
+
+        /* Toolbar */
+        .toolbar { display: flex; align-items: center; gap: 8px; padding: 10px 16px; background: #fafafa; border-bottom: 1px solid #e8e8e8; }
+        .toolbar .path-bar { flex: 1; padding: 6px 12px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 13px; background: #fff; color: #333; }
+        .toolbar button { padding: 6px 14px; border: 1px solid #d9d9d9; background: #fff; border-radius: 4px; cursor: pointer; font-size: 13px; transition: all 0.2s; }
+        .toolbar button:hover { background: #e6f7ff; border-color: #1890ff; color: #1890ff; }
+
+        /* File list */
+        .file-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); grid-auto-rows: 100px; gap: 6px; padding: 16px; min-height: 300px; }
+        .file-item { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0; margin: 0; border-radius: 4px; cursor: pointer; user-select: none; transition: background 0.15s; width: 100%; height: 100%; box-sizing: border-box; overflow: hidden; }
+        .file-item:hover { background: #e6f7ff; }
+        .file-item.selected { background: #bae7ff; }
+        .file-item .icon { font-size: 36px; line-height: 1; flex-shrink: 0; }
+        .file-item .name { font-size: 12px; text-align: center; word-break: break-all; width: 100%; padding: 0 4px; line-height: 1.3; color: #333; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; flex-shrink: 0; }
+
+        /* Context menu */
+        .context-menu { position: fixed; background: #fff; border: 1px solid #d9d9d9; border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,0.12); padding: 4px 0; min-width: 180px; z-index: 9999; display: none; }
+        .context-menu .menu-item { padding: 8px 16px; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+        .context-menu .menu-item:hover { background: #e6f7ff; color: #1890ff; }
+        .context-menu .menu-item.danger:hover { background: #fff1f0; color: #ff4d4f; }
+        .context-menu .divider { height: 1px; background: #e8e8e8; margin: 4px 0; }
+
+        /* Modal */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); z-index: 9998; display: none; }
+        .modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #fff; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.2); padding: 24px; z-index: 9999; width: 400px; display: none; }
+        .modal h3 { font-size: 16px; margin-bottom: 16px; color: #333; }
+        .modal input { width: 100%; padding: 8px 12px; border: 1px solid #d9d9d9; border-radius: 6px; font-size: 14px; }
+        .modal .modal-btns { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+        .modal .modal-btns button { padding: 6px 20px; border: none; border-radius: 6px; font-size: 13px; cursor: pointer; }
+        .modal .btn-primary { background: #1890ff; color: #fff; }
+        .modal .btn-primary:hover { background: #40a9ff; }
+        .modal .btn-cancel { background: #f0f0f0; color: #333; }
+        .modal .btn-cancel:hover { background: #d9d9d9; }
+
+        .empty-msg { grid-column: 1 / -1; text-align: center; color: #999; padding: 60px 0; font-size: 14px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>文件管理</h1>
+    <div class="nav-bar">
+        <a href="/index.html">蓝海词筛选</a>
+        <a href="/chat.html">AI 对话</a>
+        <a href="/trend.html">趋势词挖掘</a>
+        <a href="/file-manager.html" class="active">文件管理</a>
+        <a href="/openclaw.html">OpenClaw</a>
+    </div>
+
+    <div class="explorer">
+        <div class="toolbar">
+            <button onclick="goBack()">&#x2190; 后退</button>
+            <button onclick="goUp()">&#x2191; 上级</button>
+            <button onclick="refresh()">&#x1f504; 刷新</button>
+            <input type="text" class="path-bar" id="pathBar" readonly>
+            <button onclick="showNewFolderModal()">+ 新建文件夹</button>
+            <button onclick="showNewFileModal()">+ 新建文件</button>
+            <button onclick="show1688Modal()" style="background:#ff6a00;color:#fff;border-color:#ff6a00;">一键创建1688链接文件夹</button>
+            <button onclick="sendToOpenClaw()" style="background:#722ed1;color:#fff;border-color:#722ed1;">发送采集指令到 OpenClaw</button>
+        </div>
+        <div class="file-grid" id="fileGrid"></div>
+    </div>
+</div>
+
+<!-- Context Menu -->
+<div class="context-menu" id="contextMenu">
+    <div class="menu-item" onclick="ctxAction('open')">&#x1f4a1; 打开</div>
+    <div class="menu-item" onclick="ctxAction('newFolder')">&#x1f4c1; 新建文件夹</div>
+    <div class="menu-item" onclick="ctxAction('newFile')">&#x1f4c4; 新建文件</div>
+    <div class="divider"></div>
+    <div class="menu-item" onclick="ctxAction('rename')">&#x270f;&#xfe0f; 重命名</div>
+    <div class="menu-item danger" onclick="ctxAction('delete')">&#x1f5d1;&#xfe0f; 删除</div>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modalOverlay" onclick="closeModal()"></div>
+<div class="modal" id="modal">
+    <h3 id="modalTitle">新建</h3>
+    <input type="text" id="modalInput" placeholder="输入名称">
+    <div class="modal-btns">
+        <button class="btn-cancel" onclick="closeModal()">取消</button>
+        <button class="btn-primary" onclick="modalConfirm()">确认</button>
+    </div>
+</div>
+
+<!-- 1688 Modal -->
+<div class="modal-overlay" id="modal1688Overlay" onclick="close1688Modal()"></div>
+<div class="modal" id="modal1688">
+    <h3>一键创建1688链接路径</h3>
+    <p style="color:#999;font-size:12px;margin-bottom:12px;" id="dirPreview"></p>
+    <label style="font-size:13px;color:#666;margin-bottom:4px;display:block;">文件标题：</label>
+    <input type="text" id="modal1688Input" placeholder="输入标题">
+    <div class="modal-btns">
+        <button class="btn-cancel" onclick="close1688Modal()">取消</button>
+        <button class="btn-primary" onclick="confirm1688()">确认创建</button>
+    </div>
+</div>
+
+<script>
+    const BASE_DIR = 'C:\\Users\\46201\\Documents\\无极RPA文件处理';
+    let currentPath = '';
+    let pathHistory = [''];
+    let historyIdx = 0;
+    let ctxTarget = null;
+    let modalType = '';
+    // File type -> icon mapping
+    function getFileIcon(name, isDir) {
+        if (isDir) return '&#x1f4c2;'; // folder
+        const ext = name.includes('.') ? name.split('.').pop().toLowerCase() : '';
+        const icons = {
+            'txt': '&#x1f4c4;',       // text file
+            'log': '&#x1f4dd;',       // log
+            'xlsx': '&#x1f4ca;',      // excel
+            'xls': '&#x1f4ca;',       // excel
+            'csv': '&#x1f4cb;',       // csv
+            'pdf': '&#x1f4d5;',       // pdf
+            'doc': '&#x1f4c3;',       // word
+            'docx': '&#x1f4c3;',      // word
+            'md': '&#x1f4d6;',        // markdown
+            'jpg': '&#x1f5bc;&#xfe0f;',    // image
+            'jpeg': '&#x1f5bc;&#xfe0f;',   // image
+            'png': '&#x1f5bc;&#xfe0f;',    // image
+            'gif': '&#x1f5bc;&#xfe0f;',    // image
+            'webp': '&#x1f5bc;&#xfe0f;',   // image
+            'mp4': '&#x1f3ac;',       // video
+            'avi': '&#x1f3ac;',       // video
+            'mov': '&#x1f3ac;',       // video
+            'mp3': '&#x1f3b5;',       // audio
+            'wav': '&#x1f3b5;',       // audio
+            'zip': '&#x1f5c4;&#xfe0f;',    // archive
+            'rar': '&#x1f5c4;&#xfe0f;',    // archive
+            '7z': '&#x1f5c4;&#xfe0f;',     // archive
+            'tar': '&#x1f5c4;&#xfe0f;',    // archive
+            'gz': '&#x1f5c4;&#xfe0f;',     // archive
+            'js': '&#x1f4e6;',        // code
+            'ts': '&#x1f4e6;',        // code
+            'py': '&#x1f4e6;',        // code
+            'java': '&#x1f4e6;',      // code
+            'html': '&#x1f310;',      // web
+            'css': '&#x1f310;',       // web
+            'json': '&#x1f4e6;',      // data
+            'xml': '&#x1f4e6;',       // data
+            'sql': '&#x1f5c3;&#xfe0f;',    // database
+            'db': '&#x1f5c3;&#xfe0f;',     // database
+            'exe': '&#x2699;&#xfe0f;',     // executable
+            'bat': '&#x2699;&#xfe0f;',     // batch
+            'sh': '&#x2699;&#xfe0f;',      // script
+        };
+        return icons[ext] || '&#x1f4c1;'; // default file
+    }
+
+    // Load files
+    async function loadFiles(path, addToHistory) {
+        currentPath = path || '';
+        document.getElementById('pathBar').value = currentPath || BASE_DIR;
+
+        const resp = await fetch(`/api/file/list?path=${encodeURIComponent(currentPath)}`);
+        const data = await resp.json();
+
+        const grid = document.getElementById('fileGrid');
+        if (data.error) {
+            grid.innerHTML = `<div class="empty-msg" style="color:#ff4d4f">${data.error}</div>`;
+            return;
+        }
+
+        if (data.items.length === 0) {
+            grid.innerHTML = '<div class="empty-msg">空目录，右键或点击上方按钮创建</div>';
+            return;
+        }
+
+        let html = '';
+        data.items.forEach(item => {
+            const icon = getFileIcon(item.name, item.isDirectory);
+            const itemPath = currentPath ? currentPath + '\\' + item.name : item.name;
+            const dblclick = item.isDirectory
+                ? `ondblclick="navigateTo('${escPath(itemPath)}')"`
+                : `ondblclick="openFile('${escPath(itemPath)}', '${escStr(item.name)}')"`;
+            const oncontext = `oncontextmenu="showCtx(event, '${escPath(itemPath)}', ${item.isDirectory}, '${escStr(item.name)}')" `;
+            html += `<div class="file-item" title="${item.name}" ${oncontext} ${dblclick}>
+                <div class="icon">${icon}</div>
+                <div class="name">${item.name}</div>
+            </div>`;
+        });
+        grid.innerHTML = html;
+
+        if (addToHistory !== false) {
+            pathHistory = pathHistory.slice(0, historyIdx + 1);
+            pathHistory.push(currentPath);
+            historyIdx = pathHistory.length - 1;
+        }
+    }
+
+    function escPath(p) { return p.replace(/\\/g, '\\\\'); }
+    function escStr(s) { return s.replace(/'/g, "\\'").replace(/\\/g, '\\\\'); }
+
+    function navigateTo(path) {
+        loadFiles(path, true);
+    }
+
+    function goBack() {
+        if (historyIdx > 0) {
+            historyIdx--;
+            loadFiles(pathHistory[historyIdx], false);
+        }
+    }
+
+    function goUp() {
+        if (!currentPath) return;
+        const parts = currentPath.split(/[\\\/]/);
+        parts.pop();
+        loadFiles(parts.join('\\'), true);
+    }
+
+    function refresh() { loadFiles(currentPath, false); }
+
+    async function openFile(path, name) {
+        try {
+            const resp = await fetch('/api/file/open', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path, name })
+            });
+            const data = await resp.json();
+            if (data.error) {
+                alert('打开失败: ' + data.error);
+            }
+        } catch (e) {
+            alert('请求失败: ' + e.message);
+        }
+    }
+
+    // Context menu
+    function showCtx(e, path, isFolder, name) {
+        e.preventDefault();
+        e.stopPropagation();
+        ctxTarget = { path, isFolder, name };
+
+        const menu = document.getElementById('contextMenu');
+        menu.style.display = 'block';
+        menu.style.left = e.clientX + 'px';
+        menu.style.top = e.clientY + 'px';
+
+        // Adjust if near edge
+        const rect = menu.getBoundingClientRect();
+        if (rect.right > window.innerWidth) menu.style.left = (window.innerWidth - rect.width - 10) + 'px';
+        if (rect.bottom > window.innerHeight) menu.style.top = (window.innerHeight - rect.height - 10) + 'px';
+
+        const items = menu.querySelectorAll('.menu-item');
+        if (ctxTarget.isEmpty) {
+            // 空白区域右键：只显示新建
+            items[0].style.display = 'none';  // 打开
+            items[1].style.display = '';      // 新建文件夹
+            items[2].style.display = '';      // 新建文件
+            items[3].style.display = 'none';  // 重命名
+            items[4].style.display = 'none';  // 删除
+        } else if (ctxTarget.isFolder) {
+            // 文件夹右键：显示打开/新建/重命名/删除
+            items[0].style.display = '';      // 打开（进入文件夹）
+            items[1].style.display = '';      // 新建文件夹
+            items[2].style.display = '';      // 新建文件
+            items[3].style.display = '';      // 重命名
+            items[4].style.display = '';      // 删除
+        } else {
+            // 文件右键：只显示打开/重命名/删除
+            items[0].style.display = '';      // 打开
+            items[1].style.display = 'none';  // 新建文件夹
+            items[2].style.display = 'none';  // 新建文件
+            items[3].style.display = '';      // 重命名
+            items[4].style.display = '';      // 删除
+        }
+    }
+
+    document.addEventListener('click', () => { document.getElementById('contextMenu').style.display = 'none'; });
+    document.addEventListener('contextmenu', (e) => {
+        // Right-click on empty area
+        if (e.target.id === 'fileGrid' || e.target.classList.contains('empty-msg')) {
+            e.preventDefault();
+            ctxTarget = { path: currentPath, isFolder: true, name: null, isEmpty: true };
+            const menu = document.getElementById('contextMenu');
+            menu.style.display = 'block';
+            menu.style.left = e.clientX + 'px';
+            menu.style.top = e.clientY + 'px';
+            const items = menu.querySelectorAll('.menu-item');
+            items[0].style.display = 'none'; // open
+            items[3].style.display = 'none'; // rename
+            items[4].style.display = 'none'; // delete
+        }
+    });
+
+    function ctxAction(action) {
+        // Reset menu visibility
+        const items = document.querySelectorAll('#contextMenu .menu-item');
+        items.forEach(i => i.style.display = '');
+
+        document.getElementById('contextMenu').style.display = 'none';
+        if (!ctxTarget) return;
+
+        switch (action) {
+            case 'open':
+                if (ctxTarget.isFolder) navigateTo(ctxTarget.path);
+                else openFile(ctxTarget.path, ctxTarget.name);
+                break;
+            case 'newFolder':
+                showNewFolderModal(ctxTarget.path);
+                break;
+            case 'newFile':
+                showNewFileModal(ctxTarget.path);
+                break;
+            case 'rename':
+                showRenameModal(ctxTarget.path, ctxTarget.name);
+                break;
+            case 'delete':
+                if (confirm(`确定删除 "${ctxTarget.name}" 吗？`)) doDelete(ctxTarget.path);
+                break;
+        }
+    }
+
+    // Modal
+    function showModal(title, placeholder, type) {
+        document.getElementById('modalTitle').textContent = title;
+        const input = document.getElementById('modalInput');
+        input.placeholder = placeholder;
+        input.value = '';
+        document.getElementById('modal').style.display = 'block';
+        document.getElementById('modalOverlay').style.display = 'block';
+        modalType = type;
+        setTimeout(() => input.focus(), 100);
+    }
+
+    function closeModal() {
+        document.getElementById('modal').style.display = 'none';
+        document.getElementById('modalOverlay').style.display = 'none';
+    }
+
+    function showNewFolderModal(inPath) {
+        showModal('新建文件夹', '输入文件夹名称', 'mkdir');
+        document.getElementById('modalInput').dataset.path = inPath || currentPath;
+    }
+
+    function showNewFileModal(inPath) {
+        showModal('新建文件', '输入文件名（如：商品链接.txt）', 'newFile');
+        document.getElementById('modalInput').dataset.path = inPath || currentPath;
+    }
+
+    function showRenameModal(path, name) {
+        showModal('重命名', '输入新名称', 'rename');
+        document.getElementById('modalInput').value = name;
+        document.getElementById('modalInput').dataset.oldPath = path;
+    }
+
+    async function modalConfirm() {
+        const name = document.getElementById('modalInput').value.trim();
+        if (!name) return;
+
+        const basePath = document.getElementById('modalInput').dataset.path || currentPath;
+
+        if (modalType === 'mkdir') {
+            await fetch('/api/file/mkdir', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path: basePath, name })
+            });
+        } else if (modalType === 'newFile') {
+            await fetch('/api/file/createTxt', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path: basePath, name })
+            });
+        } else if (modalType === 'rename') {
+            const oldPath = document.getElementById('modalInput').dataset.oldPath;
+            await fetch('/api/file/rename', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ oldPath, newName: name })
+            });
+        }
+
+        closeModal();
+        loadFiles(currentPath, false);
+    }
+
+    document.getElementById('modalInput').addEventListener('keydown', e => {
+        if (e.key === 'Enter') modalConfirm();
+        if (e.key === 'Escape') closeModal();
+    });
+
+    async function doDelete(path) {
+        await fetch('/api/file/delete', {
+            method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path })
+        });
+        loadFiles(currentPath, false);
+    }
+
+    // 1688 Modal
+    function show1688Modal() {
+        const now = new Date();
+        const dirName = now.getFullYear() + '年'
+            + String(now.getMonth() + 1).padStart(2, '0') + '月'
+            + String(now.getDate()).padStart(2, '0') + '日'
+            + String(now.getHours()).padStart(2, '0') + '时'
+            + String(now.getMinutes()).padStart(2, '0') + '分'
+            + '_1688链接';
+        const fileName = dirName;
+        document.getElementById('modal1688').style.display = 'block';
+        document.getElementById('modal1688Overlay').style.display = 'block';
+        document.getElementById('dirPreview').textContent = '将创建目录: ' + dirName;
+        document.getElementById('modal1688Input').value = fileName;
+        document.getElementById('modal1688Input').dataset.dirName = dirName;
+        document.getElementById('modal1688Input').dataset.parentPath = currentPath;
+        setTimeout(() => { document.getElementById('modal1688Input').focus(); document.getElementById('modal1688Input').select(); }, 100);
+    }
+
+    function close1688Modal() {
+        document.getElementById('modal1688').style.display = 'none';
+        document.getElementById('modal1688Overlay').style.display = 'none';
+    }
+
+    async function confirm1688() {
+        const dirName = document.getElementById('modal1688Input').dataset.dirName;
+        const parentPath = document.getElementById('modal1688Input').dataset.parentPath;
+        const title = document.getElementById('modal1688Input').value.trim();
+        if (!title) return;
+
+        const fileName = title + '_链接';
+        const fullDirPath = parentPath ? parentPath + '\\' + dirName : dirName;
+
+        // 1. Create directory
+        const mkdirResp = await fetch('/api/file/mkdir', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: parentPath, name: dirName })
+        });
+        const mkdirData = await mkdirResp.json();
+        if (mkdirData.error) {
+            alert('创建目录失败: ' + mkdirData.error);
+            close1688Modal();
+            return;
+        }
+
+        // 2. Create txt file inside
+        const fileResp = await fetch('/api/file/createTxt', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: fullDirPath, name: fileName })
+        });
+        const fileData = await fileResp.json();
+        if (fileData.error) {
+            alert('创建文件失败: ' + fileData.error);
+            close1688Modal();
+            return;
+        }
+
+        close1688Modal();
+        loadFiles(currentPath, false);
+    }
+
+    document.getElementById('modal1688Input').addEventListener('keydown', e => {
+        if (e.key === 'Enter') confirm1688();
+        if (e.key === 'Escape') close1688Modal();
+    });
+
+    // Send prompt to OpenClaw
+    async function sendToOpenClaw() {
+        const prompt = `严格遵从以下规则执行，禁止自作主张新建日期文件夹、新建类目文件夹，所有目录均沿用用户手动建好的结构；依托外部指纹浏览器运行，永久关闭自身反爬、指纹伪装、UA轮换、IP切换，只做纯读取、采集、处理、归档：
+
+商品链接来源说明：所有1688商品链接已存放在"一键创建1688链接文件夹"功能生成的最底层txt文件中，文件名格式为"xxx_1688链接_链接.txt"。请先找到该文件，读取其中的全部链接。
+
+自动遍历目录逻辑：先扫描外层日期文件夹，再进入该日期下每一个用户自建的类目子文件夹；在每个类目文件夹中查找包含"_1688链接_链接"的txt文件，提取里面全部1688商品链接。
+
+按顺序逐个打开遍历到的每一条1688链接，全程依托指纹浏览器原生环境访问，不额外修改任何浏览器指纹、请求头、访问特征。
+
+拦截XHR/Fetch接口，优先抓取：多级类目名称、类目ID、标题、价格、详情文案、商品原生自带规格属性；接口无数据则解析页面内嵌JSON兜底。
+
+完整采集：主图、详情图、全部SKU规格、SKU价格、库存、SKU专属配图。
+
+图片处理：1688W开头加密链接自动转标准无水印JPG；主图可裁切/补边的尽量规整为1440×1440，若拉伸裁切会失真则保留原图不强行改动。
+
+若商品页面本身无任何原生规格属性，不主动爬同类目、不自行编造，仅在表格备注：无原生属性，由Hermes后续识图补填。
+
+自动标记所有异常：图片转码失败、类目缺失、SKU图缺失等，全部在表格显性标注，不隐藏问题。
+
+归档规则：每个类目下采集完成后，Excel结构化表格、所有处理好的图片，全部直接保存到当前对应的类目文件夹内，不换路径、不新建子目录。
+
+访问节奏跟随指纹浏览器真人节奏，不极速批量请求，平稳逐链接跑完整个循环。`;
+
+        await navigator.clipboard.writeText(prompt);
+        window.open('http://localhost:18789/chat?session=main', '_blank');
+        alert('采集指令已复制到剪贴板，请在打开的 OpenClaw 页面中粘贴发送');
+    }
+
+    loadFiles('', true);
+</script>
+</body>
+</html>
