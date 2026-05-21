@@ -1,0 +1,11 @@
+G:\BlueOceanFilter\taobao-ad\src\main\java\com\blueocean\taobao\mapper\TaobaoAdRecordMapper.java
+G:\BlueOceanFilter\taobao-ad\src\main\java\com\blueocean\taobao\entity\TaobaoAdRecord.java
+G:\BlueOceanFilter\taobao-ad\src\main\java\com\blueocean\taobao\enums\TimeRange.java
+G:\BlueOceanFilter\taobao-ad\src\main\java\com\blueocean\taobao\mapper\TaobaoShopMapper.java
+G:\BlueOceanFilter\taobao-ad\src\main\java\com\blueocean\taobao\entity\TaobaoShop.java
+G:\BlueOceanFilter\taobao-ad\src\main\java\com\blueocean\taobao\util\ChromeLauncher.java
+G:\BlueOceanFilter\taobao-ad\src\main\java\com\blueocean\taobao\config\TaobaoChromeConfig.java
+G:\BlueOceanFilter\taobao-ad\src\main\java\com\blueocean\taobao\service\TaobaoAdSyncService.java
+G:\BlueOceanFilter\taobao-ad\src\main\java\com\blueocean\taobao\service\SxkcScraper.java
+G:\BlueOceanFilter\taobao-ad\src\main\java\com\blueocean\taobao\util\EmailUtil.java
+G:\BlueOceanFilter\taobao-ad\src\main\java\com\blueocean\taobao\controller\TaobaoAdMonitorController.java

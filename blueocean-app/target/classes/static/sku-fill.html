@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SKU 自动填充</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #1890ff, #096dd9); color: #fff; padding: 24px; border-radius: 12px; margin-bottom: 24px; }
+        .header h1 { font-size: 24px; margin-bottom: 8px; }
+        .nav-bar { display: flex; gap: 12px; justify-content: center; margin-bottom: 24px; }
+        .nav-bar a { padding: 10px 24px; background: #fff; color: #1890ff; border: 2px solid #1890ff; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 600; transition: all 0.2s; }
+        .nav-bar a:hover { background: #1890ff; color: #fff; }
+        .nav-bar a.active { background: #1890ff; color: #fff; }
+        .card { background: #fff; border-radius: 12px; padding: 24px; margin-bottom: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+        .btn { padding: 12px 24px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+        .btn-primary { background: #722ed1; color: #fff; }
+        .btn-primary:hover { background: #642abf; }
+        .btn-primary:disabled { background: #ccc; cursor: not-allowed; }
+        .btn-info { background: #1890ff; color: #fff; }
+        .btn-info:hover { background: #0e80e0; }
+        .btn-info:disabled { background: #ccc; cursor: not-allowed; }
+        .btn-group { display: flex; gap: 12px; margin-bottom: 20px; }
+        .status { padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 14px; }
+        .status.success { background: #f6ffed; border: 1px solid #b7eb8f; color: #52c41a; }
+        .status.error { background: #fff2f0; border: 1px solid #ffccc7; color: #ff4d4f; }
+        .status.info { background: #e6f7ff; border: 1px solid #91d5ff; color: #1890ff; }
+        .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid #e0e0e0; border-top-color: #722ed1; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 8px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .hint { font-size: 13px; color: #999; padding: 8px 0; }
+        .result-json { background: #f5f5f5; border-radius: 8px; padding: 16px; font-family: monospace; font-size: 13px; white-space: pre-wrap; max-height: 600px; overflow-y: auto; }
+        .input-row { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; }
+        .input-row label { font-size: 14px; font-weight: 600; white-space: nowrap; }
+        .input-row input, .input-row textarea { flex: 1; padding: 8px 12px; border: 1px solid #d9d9d9; border-radius: 8px; font-size: 14px; }
+        .mode-badge { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+        .mode-badge.multi { background: #fff2e8; color: #ff6a00; }
+        .mode-badge.single { background: #f9f0ff; color: #722ed1; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>SKU 自动填充</h1>
+            <p>自动分析本地 SKU 数据，调用 AI 生成完整 SKU 填充方案</p>
+        </div>
+
+        <div class="nav-bar">
+            <a href="/index.html">蓝海词筛选</a>
+            <a href="/chat.html">AI 对话</a>
+            <a href="/trend.html">趋势词挖掘</a>
+            <a href="/scraper.html">1688 采集</a>
+            <a href="/qianniu-attribute.html">千牛属性</a>
+            <a href="/sku-fill.html" class="active">SKU 填充</a>
+            <a href="/file-manager.html">文件管理</a>
+        </div>
+
+        <div class="card">
+            <h3 style="margin-bottom: 16px;">输入参数</h3>
+            <div class="input-row">
+                <label>宝贝标题：</label>
+                <input id="titleInput" type="text" placeholder="请输入千牛页面的宝贝标题" />
+            </div>
+            <div class="input-row">
+                <label>页面层级：</label>
+                <input id="pageLevelsInput" type="text" placeholder="用逗号分隔，如：颜色分类,尺码" />
+            </div>
+            <div class="btn-group">
+                <!--<button class="btn btn-info" id="testBtn" onclick="testExtract()">测试提取 SKU 属性</button>-->
+                <button class="btn btn-primary" id="startBtn" onclick="startFill()">开始填充</button>
+            </div>
+            <div id="statusArea"></div>
+        </div>
+
+        <div class="card" id="resultCard" style="display:none;">
+            <h3 style="margin-bottom: 16px;">
+                AI 填充结果
+                <span id="modeBadge" class="mode-badge"></span>
+            </h3>
+            <div class="btn-group" style="margin-top: 16px;">
+                <button class="btn btn-dark" id="fillSkuBtn" onclick="fillSkuToPage()">填写到千牛页面-填写sku属性</button>
+                <button class="btn btn-primary" id="refetchBtn" onclick="refetchData()">重新抓取</button>
+            </div>
+            <div id="resultContent" class="result-json"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api/sku-fill';
+
+        function showStatus(type, message) {
+            const area = document.getElementById('statusArea');
+            area.innerHTML = '<div class="status ' + type + '">' + message + '</div>';
+        }
+
+        async function testExtract() {
+            const btn = document.getElementById('testBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span>提取中...';
+            showStatus('info', '正在连接千牛页面提取 SKU 属性...');
+
+            try {
+                const resp = await fetch(API_BASE + '/test-extract', { method: 'POST' });
+                const data = await resp.json();
+
+                if (data.success) {
+                    showStatus('success', '提取成功！共 ' + data.count + ' 个属性：' + data.props.join('、'));
+                    renderExtractResult(data);
+                } else {
+                    showStatus('error', '提取失败: ' + data.error);
+                }
+            } catch (e) {
+                showStatus('error', '请求失败: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '测试提取 SKU 属性';
+            }
+        }
+
+        function renderExtractResult(data) {
+            const card = document.getElementById('resultCard');
+            const badge = document.getElementById('modeBadge');
+            const content = document.getElementById('resultContent');
+
+            badge.className = 'mode-badge';
+            badge.textContent = '属性提取';
+            badge.style.background = '#e6f7ff';
+            badge.style.color = '#1890ff';
+
+            // 显示诊断信息
+            let displayData = {
+                "模式匹配诊断": data.diagnose || {},
+                "提取结果": {
+                    "属性数量": data.count,
+                    "属性列表": data.props
+                }
+            };
+
+            content.textContent = JSON.stringify(displayData, null, 2);
+            card.style.display = 'block';
+        }
+
+        async function startFill() {
+            const title = document.getElementById('titleInput').value.trim();
+            const pageLevelsStr = document.getElementById('pageLevelsInput').value.trim();
+            const pageLevels = pageLevelsStr ? pageLevelsStr.split(',').map(s => s.trim()).filter(s => s) : [];
+
+            if (!title) {
+                showStatus('error', '请输入宝贝标题');
+                return;
+            }
+
+            const btn = document.getElementById('startBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span>处理中...';
+            showStatus('info', '正在读取本地 SKU 数据并调用 AI...');
+
+            try {
+                const resp = await fetch(API_BASE + '/fill', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title: title, pageLevels: pageLevels })
+                });
+                const data = await resp.json();
+
+                if (data.success) {
+                    const modeLabel = data.mode === 'multi' ? '多层展示' : '单层展示';
+                    showStatus('success', 'AI 填充成功！模式: ' + modeLabel);
+                    renderResult(data);
+                } else {
+                    showStatus('error', '填充失败: ' + data.error);
+                }
+            } catch (e) {
+                showStatus('error', '请求失败: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '开始填充';
+            }
+        }
+
+        function renderResult(data) {
+            const card = document.getElementById('resultCard');
+            const badge = document.getElementById('modeBadge');
+            const content = document.getElementById('resultContent');
+
+            badge.className = 'mode-badge ' + data.mode;
+            badge.textContent = data.mode === 'multi' ? '多层展示' : '单层展示';
+
+            const displayData = {
+                mode: data.mode,
+                productDir: data.productDir,
+                aiResult: data.aiResult,
+                skuDataCount: data.skuData ? data.skuData.length : 0
+            };
+
+            content.textContent = JSON.stringify(displayData, null, 2);
+            card.style.display = 'block';
+            window.skuFillData = data;
+        }
+
+        async function fillSkuToPage() {
+            const data = window.skuFillData;
+            if (!data || !data.productDir) {
+                showStatus('error', '请先执行「开始填充」获取 SKU 数据');
+                return;
+            }
+
+            const btn = document.getElementById('fillSkuBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span>填写中...';
+            showStatus('info', '正在将 SKU 属性写入千牛页面...');
+
+            try {
+                const resp = await fetch(API_BASE + '/fill-to-page', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ productDir: data.productDir })
+                });
+                const result = await resp.json();
+
+                if (result.success) {
+                    showStatus('success', '填写完成！' + (result.message || ''));
+                } else {
+                    showStatus('error', '填写失败: ' + result.error);
+                }
+            } catch (e) {
+                showStatus('error', '请求失败: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '填写到千牛页面-填写sku属性';
+            }
+        }
+
+        async function refetchData() {
+            const title = document.getElementById('titleInput').value.trim();
+            const pageLevelsStr = document.getElementById('pageLevelsInput').value.trim();
+            const pageLevels = pageLevelsStr ? pageLevelsStr.split(',').map(s => s.trim()).filter(s => s) : [];
+
+            if (!title) {
+                showStatus('error', '请输入宝贝标题');
+                return;
+            }
+
+            const btn = document.getElementById('refetchBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span>重新抓取中...';
+            showStatus('info', '正在重新调用 AI 生成 SKU 方案...');
+
+            try {
+                const resp = await fetch(API_BASE + '/fill', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title: title, pageLevels: pageLevels, forceRefetch: true })
+                });
+                const data = await resp.json();
+
+                if (data.success) {
+                    const modeLabel = data.mode === 'multi' ? '多层展示' : '单层展示';
+                    showStatus('success', '重新抓取成功！模式: ' + modeLabel);
+                    renderResult(data);
+                } else {
+                    showStatus('error', '重新抓取失败: ' + data.error);
+                }
+            } catch (e) {
+                showStatus('error', '请求失败: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '重新抓取';
+            }
+        }
+    </script>
+</body>
+</html>

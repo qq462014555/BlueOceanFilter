@@ -44,7 +44,31 @@
       "Read(//c/chrome-debug-merchant/**)",
       "Bash(iconv -f GBK -t UTF-8)",
       "Bash(mvn dependency:tree -Dincludes=com.microsoft.playwright)",
-      "Bash(mvnw.cmd clean *)"
+      "Bash(mvnw.cmd clean *)",
+      "Bash(/taskkill /PID 55052 /F)",
+      "Bash(kill -9 55052)",
+      "Bash(powershell *)",
+      "Bash(git config *)",
+      "Bash(reg query *)",
+      "Bash(echo \"Curl failed: $?\")",
+      "Bash(ssh -o ConnectTimeout=10 -T git@github.com)",
+      "Bash(git remote *)",
+      "Bash(git push *)",
+      "Bash(claude plugin *)",
+      "Bash(echo \"EXIT_CODE: $?\")",
+      "Bash(read f *)",
+      "Bash(rm G:/BlueOceanFilter/signal/__TRACKED_VAR__)",
+      "Bash(python do_fill.py)",
+      "Bash(python *)",
+      "Bash(pip3 list *)",
+      "Bash(../../mvnw compile *)",
+      "Bash(mvnw compile *)",
+      "Bash(./mvnw compile *)",
+      "Bash(../../mvnw spring-boot:run)",
+      "Bash(mvnw.cmd compile *)",
+      "Bash(java *)",
+      "Bash(unzip -l \"G:/BlueOceanFilter/.mvn/wrapper/maven-wrapper.jar\")",
+      "Bash(git checkout *)"
     ]
   }
 }

@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>千牛商品属性提取</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #722ed1, #13c2c2); color: #fff; padding: 24px; border-radius: 12px; margin-bottom: 24px; }
+        .header h1 { font-size: 24px; margin-bottom: 8px; }
+        .header p { opacity: 0.9; font-size: 14px; }
+        .nav-bar { display: flex; gap: 12px; justify-content: center; margin-bottom: 24px; }
+        .nav-bar a { padding: 10px 24px; background: #fff; color: #1890ff; border: 2px solid #1890ff; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 600; transition: all 0.2s; }
+        .nav-bar a:hover { background: #1890ff; color: #fff; }
+        .nav-bar a.active { background: #1890ff; color: #fff; }
+        .card { background: #fff; border-radius: 12px; padding: 24px; margin-bottom: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+        .btn { padding: 12px 24px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+        .btn-primary { background: #722ed1; color: #fff; }
+        .btn-primary:hover { background: #642abf; }
+        .btn-primary:disabled { background: #ccc; cursor: not-allowed; }
+        .btn-success { background: #52c41a; color: #fff; }
+        .btn-success:hover { background: #45b018; }
+        .btn-success:disabled { background: #ccc; cursor: not-allowed; }
+        .btn-info { background: #1890ff; color: #fff; }
+        .btn-info:hover { background: #0e80e0; }
+        .btn-info:disabled { background: #ccc; cursor: not-allowed; }
+        .btn-group { display: flex; gap: 12px; margin-bottom: 20px; }
+        .btn-warning { background: #ff7a45; color: #fff; }
+        .btn-warning:hover { background: #f05620; }
+        .btn-warning:disabled { background: #ccc; cursor: not-allowed; }
+        .btn-dark { background: #333; color: #fff; }
+        .btn-dark:hover { background: #555; }
+        .btn-dark:disabled { background: #ccc; cursor: not-allowed; }
+        .btn-chrome-launch { background: #444; color: #fff; }
+        .btn-chrome-launch:hover { background: #666; }
+        .btn-chrome-launch:disabled { background: #ccc; cursor: not-allowed; }
+        .status { padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 14px; }
+        .status.success { background: #f6ffed; border: 1px solid #b7eb8f; color: #52c41a; }
+        .status.error { background: #fff2f0; border: 1px solid #ffccc7; color: #ff4d4f; }
+        .status.info { background: #e6f7ff; border: 1px solid #91d5ff; color: #1890ff; }
+        .status.hidden { display: none; }
+        .field-card { border: 1px solid #f0f0f0; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+        .field-header { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+        .field-label { font-size: 15px; font-weight: 600; color: #333; }
+        .field-type { font-size: 12px; padding: 2px 8px; border-radius: 4px; }
+        .field-type.dropdown { background: #fff2e8; color: #ff6a00; }
+        .field-type.radio { background: #f9f0ff; color: #722ed1; }
+        .field-type.text { background: #f0f5ff; color: #1890ff; }
+        .field-type.number { background: #f6ffed; color: #52c41a; }
+        .field-type.checkbox { background: #e6fffb; color: #13c2c2; }
+        .field-required { font-size: 12px; color: #ff4d4f; font-weight: 600; }
+        .field-current { font-size: 13px; color: #999; margin-bottom: 8px; }
+        .field-options { display: flex; flex-wrap: wrap; gap: 6px; }
+        .field-option { background: #fafafa; border: 1px solid #e0e0e0; border-radius: 4px; padding: 4px 10px; font-size: 12px; color: #666; }
+        .result-section { max-height: 600px; overflow-y: auto; }
+        .saved-files { margin-top: 20px; }
+        .saved-file { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; border: 1px solid #f0f0f0; border-radius: 6px; margin-bottom: 8px; }
+        .saved-file-name { font-size: 14px; color: #333; }
+        .saved-file-size { font-size: 12px; color: #999; }
+        .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid #e0e0e0; border-top-color: #722ed1; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 8px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .hint { font-size: 13px; color: #999; padding: 8px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>千牛商品属性提取</h1>
+            <p>连接到 Chrome（端口 9223），自动提取「商品发布」页面的属性字段和选项</p>
+        </div>
+
+        <div class="nav-bar">
+            <a href="/index.html">蓝海词筛选</a>
+            <a href="/chat.html">AI 对话</a>
+            <a href="/trend.html">趋势词挖掘</a>
+            <a href="/scraper.html">1688 采集</a>
+            <a href="/qianniu-attribute.html" class="active">千牛属性</a>
+            <a href="/sku-fill.html">SKU 填充</a>
+            <a href="/file-manager.html">文件管理</a>
+        </div>
+
+        <div class="card">
+            <h3 style="margin-bottom: 16px;">操作步骤</h3>
+            <ol style="padding-left: 20px; line-height: 2; color: #666;">
+                <li>点击下方「启动 Chrome(9223)」按钮打开商家后台浏览器</li>
+                <li>在 Chrome 中打开千牛「商品发布」页面</li>
+                <li>点击「测试连接」检查连接状态</li>
+                <li>连接成功后点击「开始提取」</li>
+            </ol>
+            <div class="btn-group">
+                <button class="btn btn-chrome-launch" id="chromeMerchantBtn" onclick="launchChromeMerchant()">启动 Chrome(9223)</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3 style="margin-bottom: 16px;">AI 自动填充</h3>
+            <div id="titleDisplay" style="display: flex; gap: 12px; align-items: center; margin-bottom: 12px; padding: 10px 14px; background: #f5f5f5; border-radius: 8px; min-height: 42px;">
+                <label style="font-size: 14px; font-weight: 600; white-space: nowrap;">宝贝标题：</label>
+                <input type="text" id="titleText" style="flex:1; font-size: 14px; color: #333; border: 1px solid #ddd; border-radius: 4px; padding: 4px 8px; outline: none;" placeholder="请先点击「开始提取」，标题将自动从千牛页面获取" />
+            </div>
+            <div class="btn-group">
+                <button class="btn btn-warning" id="aiFillBtn" onclick="aiAutoFill()">AI 自动填充</button>
+                <button class="btn btn-dark" id="fillPageBtn" onclick="fillToPage()">填写到千牛页面-填写商品属性</button>
+            </div>
+            <div id="aiStatusArea"></div>
+        </div>
+
+        <div class="card">
+            <div class="btn-group">
+                <button class="btn btn-info" id="testBtn" onclick="testConnection()">测试连接</button>
+                <button class="btn btn-primary" id="extractBtn" onclick="extractAttributes()">开始提取</button>
+                <button class="btn btn-success" id="refreshFilesBtn" onclick="loadSavedFiles()">刷新文件列表</button>
+                <button class="btn btn-dark" id="readJsonBtn" onclick="document.getElementById('jsonFileInput').click()">读取JSON</button>
+                <input type="file" id="jsonFileInput" accept=".json" style="display:none">
+            </div>
+
+            <div id="statusArea"></div>
+
+            <div id="resultSection" class="result-section" style="display:none;"></div>
+
+            <div class="saved-files">
+                <h3 style="margin-bottom: 12px;">已保存的 JSON 文件</h3>
+                <div id="savedFilesList"><span class="hint">点击「刷新文件列表」查看</span></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api/qianniu-attribute';
+
+        function showStatus(type, message) {
+            const area = document.getElementById('statusArea');
+            area.innerHTML = '<div class="status ' + type + '">' + message + '</div>';
+        }
+
+        async function testConnection() {
+            const btn = document.getElementById('testBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span>连接中...';
+            showStatus('info', '正在连接到 Chrome 端口 9223...');
+
+            try {
+                const resp = await fetch(API_BASE + '/test-connection', { method: 'POST' });
+                const data = await resp.json();
+
+                if (data.connected) {
+                    showStatus('success', '连接成功！上下文数: ' + data.contexts + '，标签页数: ' + data.pages);
+                } else {
+                    showStatus('error', '连接失败: ' + data.error);
+                }
+            } catch (e) {
+                showStatus('error', '请求失败: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '测试连接';
+            }
+        }
+
+        async function extractAttributes() {
+            const btn = document.getElementById('extractBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span>提取中...';
+            showStatus('info', '正在查找「商品发布」标签页并提取属性...');
+            document.getElementById('resultSection').style.display = 'none';
+
+            try {
+                const resp = await fetch(API_BASE + '/extract', { method: 'POST' });
+                const data = await resp.json();
+
+                if (data.success) {
+                    showStatus('success', '提取成功！共 ' + data.fieldCount + ' 个属性字段，已保存到: ' + data.savedPath);
+                    window.extractedFields = data.fields;
+                    if (data.title) {
+                        document.getElementById('titleText').value = data.title;
+                        document.getElementById('titleText').style.color = '#333';
+                    }
+                    renderFields(data.fields);
+                    loadSavedFiles();
+                } else {
+                    showStatus('error', '提取失败: ' + data.error);
+                }
+            } catch (e) {
+                showStatus('error', '请求失败: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '开始提取';
+            }
+        }
+
+        function renderFields(fields) {
+            if (!fields || fields.length === 0) {
+                document.getElementById('resultSection').innerHTML = '<p class="hint">未提取到任何属性字段</p>';
+                document.getElementById('resultSection').style.display = 'block';
+                return;
+            }
+
+            let html = '<h3 style="margin-bottom: 12px;">提取结果 (' + fields.length + ' 个字段)</h3>';
+            for (const f of fields) {
+                html += '<div class="field-card">';
+                html += '<div class="field-header">';
+                html += '<span class="field-label">' + escapeHtml(f.label) + '</span>';
+                html += '<span class="field-type ' + f.type + '">' + f.type + '</span>';
+                if (f.required) html += '<span class="field-required">* 必填</span>';
+                html += '</div>';
+
+                const val = f.currentValue;
+                if (val) {
+                    html += '<div class="field-current" style="color:#52c41a;font-weight:600;">AI 填充值: ' + escapeHtml(val) + '</div>';
+                } else {
+                    html += '<div class="field-current" style="color:#ff9800;">AI 未填充（不确定）</div>';
+                }
+
+                if (f.options && f.options.length > 0) {
+                    html += '<div style="font-size:13px;color:#666;margin-bottom:6px;">可选值 (' + f.options.length + '):</div>';
+                    html += '<div class="field-options">';
+                    for (const opt of f.options) {
+                        const isMatched = opt === val;
+                        html += '<span class="field-option" style="' + (isMatched ? 'background:#f6ffed;border-color:#52c41a;color:#52c41a;font-weight:600;' : '') + '">' + escapeHtml(opt) + '</span>';
+                    }
+                    html += '</div>';
+                }
+
+                html += '</div>';
+            }
+
+            document.getElementById('resultSection').innerHTML = html;
+            document.getElementById('resultSection').style.display = 'block';
+        }
+
+        async function loadSavedFiles() {
+            const btn = document.getElementById('refreshFilesBtn');
+            btn.disabled = true;
+            btn.textContent = '加载中...';
+
+            try {
+                const resp = await fetch(API_BASE + '/list-saved');
+                const files = await resp.json();
+
+                const list = document.getElementById('savedFilesList');
+                if (files.length === 0) {
+                    list.innerHTML = '<span class="hint">暂无已保存的文件</span>';
+                } else {
+                    let html = '';
+                    for (const f of files) {
+                        const sizeKB = (f.size / 1024).toFixed(1);
+                        html += '<div class="saved-file">';
+                        html += '<span class="saved-file-name">' + escapeHtml(f.name) + '</span>';
+                        html += '<span class="saved-file-size">' + sizeKB + ' KB · ' + escapeHtml(f.modified) + '</span>';
+                        html += '<button class="btn btn-info" style="padding:4px 12px;font-size:12px;margin-left:8px;" onclick="readServerJson(\'' + escapeHtml(f.path) + '\')">读取</button>';
+                        html += '</div>';
+                    }
+                    list.innerHTML = html;
+                }
+            } catch (e) {
+                document.getElementById('savedFilesList').innerHTML = '<span class="hint" style="color:#ff4d4f;">加载失败: ' + escapeHtml(e.message) + '</span>';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '刷新文件列表';
+            }
+        }
+
+        async function readServerJson(filepath) {
+            try {
+                const resp = await fetch(API_BASE + '/read-json?filepath=' + encodeURIComponent(filepath));
+                const data = await resp.json();
+                if (data.success) {
+                    showStatus('success', '已读取: ' + filepath + '，共 ' + data.fieldCount + ' 个字段');
+                    window.extractedFields = data.fields;
+                    if (data.title) {
+                        document.getElementById('titleText').value = data.title;
+                        document.getElementById('titleText').style.color = '#333';
+                    }
+                    renderFields(data.fields);
+                } else {
+                    showStatus('error', '读取失败: ' + data.error);
+                }
+            } catch (e) {
+                showStatus('error', '请求失败: ' + e.message);
+            }
+        }
+
+        document.getElementById('jsonFileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(ev) {
+                try {
+                    const data = JSON.parse(ev.target.result);
+                    const fields = data.fields || [];
+                    if (fields.length === 0) {
+                        showStatus('info', '文件中未找到属性字段');
+                        return;
+                    }
+                    window.extractedFields = fields;
+                    if (data.title) {
+                        document.getElementById('titleText').value = data.title;
+                        document.getElementById('titleText').style.color = '#333';
+                    }
+
+                    // 统计 AI 已填充的字段
+                    let filledCount = 0;
+                    let emptyCount = 0;
+                    for (const f of fields) {
+                        if (f.currentValue && f.currentValue.trim()) filledCount++;
+                        else emptyCount++;
+                    }
+
+                    showStatus('success', '已读取: ' + file.name + '，共 ' + fields.length + ' 个字段，AI 已填充 ' + filledCount + ' 个，待填写 ' + emptyCount + ' 个');
+                    // 调用 AI 结果渲染，与「AI 自动填充」按钮效果一致
+                    renderFields(fields);
+                } catch (err) {
+                    showStatus('error', 'JSON 解析失败: ' + err.message);
+                }
+            };
+            reader.readAsText(file);
+            e.target.value = '';
+        });
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        async function aiAutoFill() {
+            const title = document.getElementById('titleText').value.trim();
+
+            // 获取当前已提取的字段
+            const resultSection = document.getElementById('resultSection');
+            let fields = [];
+            if (resultSection.style.display !== 'none') {
+                // 从页面状态中获取（需要保存提取结果到全局变量）
+                if (window.extractedFields && window.extractedFields.length > 0) {
+                    fields = window.extractedFields;
+                }
+            }
+
+            if (fields.length === 0) {
+                document.getElementById('aiStatusArea').innerHTML = '<div class="status error">请先执行「开始提取」获取属性字段</div>';
+                return;
+            }
+
+            const btn = document.getElementById('aiFillBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span>AI 填充中...';
+            document.getElementById('aiStatusArea').innerHTML = '<div class="status info">正在调用 qwen-vl-max 模型进行智能填充...</div>';
+            document.getElementById('resultSection').style.display = 'none';
+
+            try {
+                const resp = await fetch('/api/attribute-auto-fill/fill', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title: title, fields: fields })
+                });
+                const data = await resp.json();
+
+                if (data.success) {
+                    document.getElementById('aiStatusArea').innerHTML = '<div class="status success">AI 填充成功！共填充 ' + data.fieldCount + ' 个字段，已保存到: ' + escapeHtml(data.savedPath) + '</div>';
+                    window.extractedFields = data.fields;
+                    renderFields(data.fields);
+                } else {
+                    document.getElementById('aiStatusArea').innerHTML = '<div class="status error">AI 填充失败: ' + escapeHtml(data.error) + '</div>';
+                }
+            } catch (e) {
+                document.getElementById('aiStatusArea').innerHTML = '<div class="status error">请求失败: ' + escapeHtml(e.message) + '</div>';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'AI 自动填充';
+            }
+        }
+
+        async function fillToPage() {
+            const title = document.getElementById('titleText').value.trim();
+            if (!title) {
+                showStatus('error', '请先提取商品标题');
+                return;
+            }
+
+            const btn = document.getElementById('fillPageBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span>通知 Claude 填写中...';
+            showStatus('info', '正在发送信号，Claude 将自动读取 AI 填充结果并填写到千牛页面...');
+
+            try {
+                const resp = await fetch(API_BASE + '/fill-fields', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title: title })
+                });
+                const data = await resp.json();
+
+                if (data.success) {
+                    showStatus('success', data.message + '，JSON 路径: ' + data.jsonPath);
+                } else {
+                    showStatus('error', '失败: ' + data.error);
+                }
+            } catch (e) {
+                showStatus('error', '请求失败: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '填写到千牛页面-填写商品属性';
+            }
+        }
+
+        async function launchChromeMerchant() {
+            const btn = document.getElementById('chromeMerchantBtn');
+            btn.disabled = true; btn.textContent = '启动中...';
+            try {
+                await fetch('/api/scraper/launch-chrome-merchant', { method: 'POST' });
+            } catch (e) {
+                showStatus('error', '启动失败: ' + e.message);
+            }
+            finally { btn.disabled = false; btn.textContent = '启动 Chrome(9223)'; }
+        }
+    </script>
+</body>
+</html>

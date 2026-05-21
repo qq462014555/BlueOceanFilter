@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>蓝海词筛选系统</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { height: 100%; overflow: hidden; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; display: flex; }
+
+        /* Sidebar */
+        .sidebar {
+            width: 210px;
+            background: #1a1a2e;
+            color: #fff;
+            height: 100vh;
+            position: fixed;
+            left: 0;
+            top: 0;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            user-select: none;
+        }
+        .sidebar .logo {
+            padding: 22px 18px 18px;
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            color: #e0e0e0;
+        }
+        .sidebar .logo span {
+            display: block;
+            font-size: 11px;
+            font-weight: 400;
+            color: #666;
+            margin-top: 4px;
+            letter-spacing: 0;
+        }
+        .sidebar nav { padding: 8px 0; flex: 1; overflow-y: auto; }
+        .sidebar nav a {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 11px 18px;
+            color: #aaa;
+            text-decoration: none;
+            font-size: 13px;
+            transition: all 0.15s;
+            border-left: 3px solid transparent;
+            cursor: pointer;
+        }
+        .sidebar nav a:hover {
+            background: rgba(255,255,255,0.06);
+            color: #fff;
+        }
+        .sidebar nav a.active {
+            background: rgba(24,144,255,0.15);
+            color: #fff;
+            border-left-color: #1890ff;
+        }
+        .sidebar nav a .icon {
+            width: 18px;
+            text-align: center;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+        .sidebar .footer {
+            padding: 12px 18px;
+            font-size: 11px;
+            color: #444;
+            border-top: 1px solid rgba(255,255,255,0.06);
+        }
+
+        /* Content area */
+        .content {
+            margin-left: 210px;
+            width: calc(100% - 210px);
+            height: 100vh;
+        }
+        .content iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <div class="logo">蓝海词<span>AI 筛选工具</span></div>
+    <nav id="nav">
+        <a data-page="/index-content.html" class="active"><span class="icon">&#9776;</span>蓝海词筛选</a>
+        <a data-page="/chat.html"><span class="icon">&#9998;</span>AI 对话</a>
+        <a data-page="/trend.html"><span class="icon">&#9733;</span>趋势词挖掘</a>
+        <a data-page="/scraper.html"><span class="icon">&#128722;</span>1688 采集</a>
+        <a data-page="/qianniu-attribute.html"><span class="icon">&#9881;</span>千牛属性</a>
+        <a data-page="/sku-fill.html"><span class="icon">&#128203;</span>SKU 填充</a>
+        <a data-page="/file-manager.html"><span class="icon">&#128193;</span>文件管理</a>
+        <a data-page="/openclaw.html"><span class="icon">&#128025;</span>OpenClaw</a>
+        <a data-page="/scheduled-task.html"><span class="icon">&#9200;</span>定时任务</a>
+        <a data-page="/taobao-ad-monitor.html"><span class="icon">&#128200;</span>淘宝付费监控</a>
+    </nav>
+    <div class="footer">v1.0 &copy; 2026</div>
+</div>
+
+<div class="content">
+    <iframe id="mainFrame" src="/index-content.html"></iframe>
+</div>
+
+<script>
+    const nav = document.getElementById('nav');
+    const frame = document.getElementById('mainFrame');
+    const links = nav.querySelectorAll('a');
+
+    links.forEach(link => {
+        link.addEventListener('click', e => {
+            e.preventDefault();
+            const page = link.getAttribute('data-page');
+            links.forEach(l => l.classList.remove('active'));
+            link.classList.add('active');
+            frame.src = page;
+        });
+    });
+</script>
+</body>
+</html>
