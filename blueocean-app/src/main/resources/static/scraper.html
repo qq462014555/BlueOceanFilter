@@ -167,12 +167,6 @@
         .price { color: #ff6a00; font-weight: 600; }
         .original-price { color: #999; text-decoration: line-through; font-size: 12px; }
 
-        /* Draggable SKU table */
-        .sku-table-draggable tbody tr.sku-row { cursor: grab; user-select: none; transition: box-shadow 0.2s ease; }
-        .sku-table-draggable tbody tr.sku-row:active { cursor: grabbing; }
-        .sku-table-draggable tbody tr.sku-row.sku-dragging { opacity: 0.3; }
-        .sku-table-draggable tbody tr.sku-row.sku-drop-above { box-shadow: 0 -2px 0 0 #ff6a00; }
-        .sku-table-draggable tbody tr.sku-row.sku-drop-below { box-shadow: 0 2px 0 0 #ff6a00; }
 
         .empty-state { text-align: center; padding: 60px 20px; color: #999; }
         .empty-state svg { width: 64px; height: 64px; margin-bottom: 16px; opacity: 0.3; }
@@ -251,6 +245,10 @@
         .sortable-ghost { opacity: 0.3; transform: scale(0.95); }
         .sortable-chosen { box-shadow: 0 0 0 2px #ff6a00; }
         .sortable-drag { opacity: 0.95; transform: rotate(2deg) scale(1.05); box-shadow: 0 12px 40px rgba(255,106,0,0.4); border-radius: 8px; }
+        .sku-table-draggable tbody tr.sku-row { cursor: grab; }
+        .sku-table-draggable tbody tr.sku-row:active { cursor: grabbing; }
+        .sku-table .sku-delete-btn { background: none; border: none; color: #999; cursor: pointer; font-size: 14px; padding: 2px 6px; border-radius: 4px; transition: all 0.2s; }
+        .sku-table .sku-delete-btn:hover { color: #ff4d4f; background: #fff1f0; }
     </style>
 </head>
 <body>
@@ -409,7 +407,7 @@
     <script src="/js/scraper-utils.js?v=2"></script>
     <script src="/js/scraper-main-image.js?v=4"></script>
     <script src="/js/scraper-detail-image.js?v=2"></script>
-    <script src="/js/scraper-sku-image.js?v=7"></script>
+    <script src="/js/scraper-sku-image.js?v=8"></script>
     <script src="/js/scraper-image.js?v=15"></script>
     <script src="/js/scraper-product.js?v=15"></script>
     <script src="/js/scraper-title.js?v=2"></script>

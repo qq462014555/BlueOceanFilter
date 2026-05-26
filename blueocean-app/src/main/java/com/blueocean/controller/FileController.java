@@ -163,6 +163,9 @@ public class FileController {
         result.put("detailImages", detailImageService.list(prodDir).stream()
                 .map(p -> Collections.singletonMap("path", p))
                 .toList());
+        result.put("skuImages", skuImageService.list(prodDir).stream()
+                .map(p -> Collections.singletonMap("path", p))
+                .toList());
         return ResponseEntity.ok(result);
     }
 
@@ -206,9 +209,9 @@ public class FileController {
     public ResponseEntity<?> reorderSkus(@RequestBody Map<String, Object> request) throws IOException {
         String productDir = (String) request.get("productDir");
         @SuppressWarnings("unchecked")
-        List<String> orderedSkuIds = (List<String>) request.get("orderedSkuIds");
-        if (productDir == null || orderedSkuIds == null || orderedSkuIds.isEmpty()) {
-            return ResponseEntity.badRequest().body("缺少 productDir 或 orderedSkuIds");
+        List<String> orderedSpecNames = (List<String>) request.get("orderedSpecNames");
+        if (productDir == null || orderedSpecNames == null || orderedSpecNames.isEmpty()) {
+            return ResponseEntity.badRequest().body("缺少 productDir 或 orderedSpecNames");
         }
 
         Path prodDir = Paths.get(productDir);
@@ -225,32 +228,42 @@ public class FileController {
             return ResponseEntity.badRequest().body("没有SKU数据");
         }
 
-        Map<String, Integer> skuIdToIndex = new LinkedHashMap<>();
+        // Build specName → original index map
+        Map<String, Integer> specNameToIndex = new LinkedHashMap<>();
         for (int i = 0; i < currentSkus.size(); i++) {
-            skuIdToIndex.put(String.valueOf(currentSkus.get(i).get("skuId")), i);
+            String specName = String.valueOf(currentSkus.get(i).get("specName"));
+            specNameToIndex.put(specName, i);
         }
 
+        // Reorder based on new specName order
         List<Map<String, Object>> reorderedSkus = new ArrayList<>();
-        for (String skuId : orderedSkuIds) {
-            Integer idx = skuIdToIndex.get(skuId);
-            if (idx != null) reorderedSkus.add(currentSkus.get(idx));
+        Set<String> seenNames = new LinkedHashSet<>();
+        for (String specName : orderedSpecNames) {
+            Integer idx = specNameToIndex.get(specName);
+            if (idx != null) {
+                reorderedSkus.add(currentSkus.get(idx));
+                seenNames.add(specName);
+            }
         }
+        // Append remaining SKUs not in the reorder list
         for (int i = 0; i < currentSkus.size(); i++) {
-            String skuId = String.valueOf(currentSkus.get(i).get("skuId"));
-            if (!orderedSkuIds.contains(skuId)) reorderedSkus.add(currentSkus.get(i));
+            String specName = String.valueOf(currentSkus.get(i).get("specName"));
+            if (!seenNames.contains(specName)) reorderedSkus.add(currentSkus.get(i));
         }
 
-        // Reorder SKU image files
-        skuImageService.reorder(productDir, orderedSkuIds.stream()
-                .map(id -> {
-                    Integer idx = skuIdToIndex.get(id);
-                    return idx != null ? prodDir.resolve("SKU图").resolve("SKU图_" + String.format("%02d", idx + 1) + ".jpg").toString() : null;
-                })
-                .filter(Objects::nonNull)
-                .filter(p -> Files.exists(Paths.get(p)))
-                .toList());
+        // Reorder SKU image files based on new order
+        List<String> orderedSkuPaths = new ArrayList<>();
+        for (int i = 0; i < reorderedSkus.size(); i++) {
+            String specName = String.valueOf(reorderedSkus.get(i).get("specName"));
+            Integer oldIdx = specNameToIndex.get(specName);
+            if (oldIdx != null) {
+                String oldPath = prodDir.resolve("SKU图").resolve("SKU图_" + String.format("%02d", oldIdx + 1) + ".jpg").toString();
+                if (Files.exists(Paths.get(oldPath))) orderedSkuPaths.add(oldPath);
+            }
+        }
+        if (!orderedSkuPaths.isEmpty()) skuImageService.reorder(productDir, orderedSkuPaths);
 
-        // Update image URLs
+        // Update image URLs for reordered SKUs
         for (int i = 0; i < reorderedSkus.size(); i++) {
             String skuImgPath = prodDir.resolve("SKU图").resolve("SKU图_" + String.format("%02d", i + 1) + ".jpg").toString();
             reorderedSkus.get(i).put("imageUrl", Files.exists(Paths.get(skuImgPath)) ? skuImgPath : "");
@@ -262,7 +275,7 @@ public class FileController {
 
         // Rewrite CSV
         Path csvPath = prodDir.resolve("价格表.csv");
-        if (Files.exists(csvPath) && reorderedSkus.size() > 0) {
+        if (Files.exists(csvPath) && !reorderedSkus.isEmpty()) {
             List<String> csvLines = Files.readAllLines(csvPath);
             String header = csvLines.get(0);
             StringBuilder sb = new StringBuilder(header).append("\n");
@@ -272,6 +285,24 @@ public class FileController {
             Path tmpCsv = csvPath.resolveSibling("价格表_tmp_.csv");
             Files.write(tmpCsv, sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
             Files.move(tmpCsv, csvPath, StandardCopyOption.REPLACE_EXISTING);
+        }
+
+        // Reorder 商品属性.json — 颜色 字段（逗号分隔，顺序对齐新 SKU 顺序）
+        Path attrPath = prodDir.resolve("商品属性.json");
+        if (Files.exists(attrPath)) {
+            String attrContent = Files.readString(attrPath);
+            Map<String, Object> attrs = mapper.readValue(attrContent, Map.class);
+            String colorField = (String) attrs.get("颜色");
+            if (colorField != null && colorField.contains(",")) {
+                // 旧颜色顺序 → 新颜色顺序，按 reorderedSkus 的 specName 排列
+                String newColorOrder = reorderedSkus.stream()
+                        .map(s -> String.valueOf(s.get("specName")))
+                        .filter(s -> !s.isEmpty())
+                        .collect(java.util.stream.Collectors.joining(","));
+                attrs.put("颜色", newColorOrder);
+                Files.writeString(attrPath, mapper.writerWithDefaultPrettyPrinter().writeValueAsString(attrs));
+                log.info("已重排 商品属性.json 中的 颜色 字段");
+            }
         }
 
         return ResponseEntity.ok(Collections.singletonMap("message", "已重排序"));
@@ -296,11 +327,9 @@ public class FileController {
     @PostMapping("/rename-sku")
     public ResponseEntity<?> renameSku(@RequestBody Map<String, Object> request) {
         try {
-            log.info("收到 rename-sku 请求: {}", request);
             String productDir = (String) request.get("productDir");
             String oldName = (String) request.get("oldName");
             String newName = (String) request.get("newName");
-            log.info("解析参数: productDir=[{}], oldName=[{}], newName=[{}]", productDir, oldName, newName);
             if (productDir == null || oldName == null || newName == null) {
                 return ResponseEntity.badRequest().body("缺少参数");
             }
@@ -313,6 +342,105 @@ public class FileController {
             log.error("rename-sku 异常: ", e);
             return ResponseEntity.badRequest().body("重命名失败: " + e.getMessage());
         }
+    }
+
+    // ==================== SKU Delete ====================
+
+    @PostMapping("/delete-sku")
+    public ResponseEntity<?> deleteSku(@RequestBody Map<String, String> request) throws IOException {
+        String productDir = request.get("productDir");
+        String specName = request.get("specName");
+        if (productDir == null || specName == null) {
+            return ResponseEntity.badRequest().body("缺少参数");
+        }
+
+        Path prodDir = Paths.get(productDir);
+        Path jsonPath = prodDir.resolve("商品数据.json");
+        if (!Files.exists(jsonPath)) {
+            return ResponseEntity.badRequest().body("商品数据.json不存在");
+        }
+
+        // 1. 商品数据.json — 移除该 SKU
+        String jsonContent = Files.readString(jsonPath);
+        Map<String, Object> jsonData = mapper.readValue(jsonContent, Map.class);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> skus = (List<Map<String, Object>>) jsonData.get("skus");
+        if (skus == null) return ResponseEntity.badRequest().body("没有SKU数据");
+
+        int removeIdx = -1;
+        for (int i = 0; i < skus.size(); i++) {
+            if (specName.equals(String.valueOf(skus.get(i).get("specName")))) {
+                removeIdx = i;
+                break;
+            }
+        }
+        if (removeIdx < 0) return ResponseEntity.badRequest().body("未找到SKU: " + specName);
+
+        skus.remove(removeIdx);
+
+        // 删除对应的 SKU 图片并重排剩余文件
+        Path skuImgDir = prodDir.resolve("SKU图");
+        if (Files.exists(skuImgDir)) {
+            Path removedImg = skuImgDir.resolve("SKU图_" + String.format("%02d", removeIdx + 1) + ".jpg");
+            if (Files.exists(removedImg)) Files.delete(removedImg);
+
+            // 重排剩余图片编号
+            List<String> existingImgs = new ArrayList<>();
+            try (var stream = Files.list(skuImgDir)) {
+                stream.filter(p -> {
+                    String n = p.getFileName().toString();
+                    return n.startsWith("SKU图_") && n.endsWith(".jpg");
+                })
+                .sorted()
+                .forEach(p -> existingImgs.add(p.toString()));
+            }
+            if (!existingImgs.isEmpty()) {
+                skuImageService.reorder(productDir, new ArrayList<>(existingImgs));
+            }
+        }
+
+        // 重新更新 imageUrl
+        for (int i = 0; i < skus.size(); i++) {
+            String skuImgPath = prodDir.resolve("SKU图").resolve("SKU图_" + String.format("%02d", i + 1) + ".jpg").toString();
+            skus.get(i).put("imageUrl", Files.exists(Paths.get(skuImgPath)) ? skuImgPath : "");
+        }
+        Files.writeString(jsonPath, mapper.writerWithDefaultPrettyPrinter().writeValueAsString(jsonData));
+
+        // 2. 价格表.csv — 移除对应行
+        Path csvPath = prodDir.resolve("价格表.csv");
+        if (Files.exists(csvPath)) {
+            List<String> lines = Files.readAllLines(csvPath);
+            if (lines.size() > 1) {
+                String header = lines.get(0);
+                List<String> newLines = new ArrayList<>();
+                newLines.add(header);
+                // 跳过被删除的行（按原顺序，即 removeIdx + 1 跳过表头）
+                for (int i = 1; i < lines.size(); i++) {
+                    if (i != removeIdx + 1) newLines.add(lines.get(i));
+                }
+                Path tmpCsv = csvPath.resolveSibling("价格表_tmp_.csv");
+                Files.write(tmpCsv, String.join("\n", newLines).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                Files.move(tmpCsv, csvPath, StandardCopyOption.REPLACE_EXISTING);
+            }
+        }
+
+        // 3. 商品属性.json — 颜色字段移除对应值
+        Path attrPath = prodDir.resolve("商品属性.json");
+        if (Files.exists(attrPath)) {
+            String attrContent = Files.readString(attrPath);
+            Map<String, Object> attrs = mapper.readValue(attrContent, Map.class);
+            String colorField = (String) attrs.get("颜色");
+            if (colorField != null && colorField.contains(",")) {
+                String newColorOrder = skus.stream()
+                        .map(s -> String.valueOf(s.get("specName")))
+                        .filter(s -> !s.isEmpty())
+                        .collect(java.util.stream.Collectors.joining(","));
+                attrs.put("颜色", newColorOrder);
+                Files.writeString(attrPath, mapper.writerWithDefaultPrettyPrinter().writeValueAsString(attrs));
+            }
+        }
+
+        return ResponseEntity.ok(Collections.singletonMap("message", "已删除"));
     }
 
     // ==================== Product Loading ====================

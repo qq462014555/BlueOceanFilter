@@ -247,7 +247,7 @@ function buildProductCardHtml(product, isFromScrape) {
         }
         html += '<thead><tr><th>SKU图</th><th>规格名称</th>';
         for (const fn of fieldNames) html += '<th>' + escapeHtml(fn) + '</th>';
-        html += '<th>批发价</th><th>最终价格</th><th>8折价</th><th>利润</th><th>库存</th></tr></thead>';
+        html += '<th>批发价</th><th>最终价格</th><th>8折价</th><th>利润</th><th>库存</th><th></th></tr></thead>';
         html += '<tbody>';
         product.skus.forEach((sku, idx) => {
             html += '<tr class="sku-row" data-sku-index="' + idx + '" data-sku-id="' + escapeAttr(sku.skuId || '') + '">';
@@ -266,6 +266,7 @@ function buildProductCardHtml(product, isFromScrape) {
             html += '<td><span class="price">¥' + discountPrice.toFixed(2) + '</span></td>';
             html += '<td style="color:' + (profit >= 0 ? '#52c41a' : '#ff4d4f') + '">¥' + profit.toFixed(2) + '</td>';
             html += '<td>' + (sku.stock || 0) + '</td>';
+            html += '<td><button class="action-btn sku-delete-btn" data-spec-name="' + escapeAttr(sku.specName || '') + '" onclick="deleteSkuRow(this)">删除</button></td>';
             html += '</tr>';
         });
         html += '</tbody></table></div>';
