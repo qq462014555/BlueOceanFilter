@@ -70,7 +70,9 @@
       "Bash(unzip -l \"G:/BlueOceanFilter/.mvn/wrapper/maven-wrapper.jar\")",
       "Bash(git checkout *)",
       "Bash(python3 *)",
-      "WebFetch(domain:cdn.jsdelivr.net)"
+      "WebFetch(domain:cdn.jsdelivr.net)",
+      "Bash(xargs head -5)",
+      "Bash(xargs head -2)"
     ]
   }
 }

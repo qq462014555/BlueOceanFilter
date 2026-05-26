@@ -8,6 +8,7 @@ G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\scraper\LinkFileRea
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\controller\FileManagerController.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\scraper\LinkEntry.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\service\ImageFileService.java
+G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\service\SkuRenameService.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\service\SkuImageService.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\entity\KeywordHistory.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\service\DashScopeClient.java

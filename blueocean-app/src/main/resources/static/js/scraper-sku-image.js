@@ -1,4 +1,4 @@
-// scraper-sku-image.js — SKU 图拖拽排序 (SortableJS)
+// scraper-sku-image.js — SKU 图拖拽排序 (SortableJS) + SKU 规格名称编辑
 
 function setupSkuImageDrag(card) {
     card.querySelectorAll('.section').forEach(section => {
@@ -128,3 +128,52 @@ function skuImageRefreshTable(card, grid) {
         }
     }
 }
+
+/**
+ * 双击 SKU 规格名称，进入编辑
+ */
+document.addEventListener('dblclick', function(e) {
+    const td = e.target.closest('.sku-spec-name-cell');
+    if (!td || td.querySelector('input')) return;
+    const productDir = td.getAttribute('data-product-dir');
+    const oldName = td.textContent.trim();
+    if (!productDir || !oldName || oldName === '-') return;
+
+    const input = document.createElement('input');
+    input.className = 'sku-spec-name-input';
+    input.value = oldName;
+    td.textContent = '';
+    td.appendChild(input);
+    input.focus();
+    input.select();
+
+    const finish = async () => {
+        const newName = input.value.trim();
+        if (!newName || newName === oldName) { td.textContent = oldName; return; }
+        try {
+            const body = JSON.stringify({ productDir, oldName, newName });
+            console.log('rename-sku request:', body);
+            const resp = await fetch('/api/files/rename-sku', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: body
+            });
+            const data = await resp.json();
+            console.log('rename-sku response:', resp.status, data);
+            if (!resp.ok || data.error) { showToast('失败: ' + (data.error || data.message), 'error'); td.textContent = oldName; return; }
+            td.textContent = newName;
+            showToast('已更新', 'success');
+            td.textContent = newName;
+            showToast('已更新', 'success');
+        } catch (e) {
+            showToast('失败: ' + e.message, 'error');
+            td.textContent = oldName;
+        }
+    };
+
+    input.onblur = finish;
+    input.onkeydown = (e) => {
+        if (e.key === 'Enter') { input.onblur = null; input.blur(); }
+        if (e.key === 'Escape') { input.value = oldName; input.onblur = null; input.blur(); }
+    };
+});

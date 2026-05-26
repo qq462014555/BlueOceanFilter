@@ -252,7 +252,7 @@ function buildProductCardHtml(product, isFromScrape) {
         product.skus.forEach((sku, idx) => {
             html += '<tr class="sku-row" data-sku-index="' + idx + '" data-sku-id="' + escapeAttr(sku.skuId || '') + '">';
             html += '<td>' + (sku.imageUrl ? '<img class="sku-img" src="' + escapeHtml(sku.imageUrl.startsWith('http') || sku.imageUrl.startsWith('data:') ? sku.imageUrl : toFileUrl(sku.imageUrl) + '?t=' + Date.now()) + '" onclick="showModal(this.src)">' : '-') + '</td>';
-            html += '<td>' + escapeHtml(sku.specName || '-') + '</td>';
+            html += '<td class="sku-spec-name-cell" data-spec-name="1" data-product-dir="' + escapeAttr(product.productDir || '') + '">' + escapeHtml(sku.specName || '-') + '</td>';
             if (sku.detailFields) {
                 const parts = sku.detailFields.split(', ');
                 for (const p of parts) { const eqIdx = p.indexOf('='); html += '<td>' + escapeHtml(eqIdx > 0 ? p.substring(eqIdx + 1) : p) + '</td>'; }

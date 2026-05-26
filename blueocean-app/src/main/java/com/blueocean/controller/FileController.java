@@ -1,10 +1,6 @@
 package com.blueocean.controller;
 
-import com.blueocean.service.DetailImageService;
-import com.blueocean.service.ImageFileService;
-import com.blueocean.service.MainImageService;
-import com.blueocean.service.SkuImageService;
-import com.blueocean.service.VideoService;
+import com.blueocean.service.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,17 +27,20 @@ public class FileController {
     private final SkuImageService skuImageService;
     private final VideoService videoService;
     private final ImageFileService imageFileService;
+    private final SkuRenameService skuRenameService;
 
     public FileController(MainImageService mainImageService,
                           DetailImageService detailImageService,
                           SkuImageService skuImageService,
                           VideoService videoService,
-                          ImageFileService imageFileService) {
+                          ImageFileService imageFileService,
+                          SkuRenameService skuRenameService) {
         this.mainImageService = mainImageService;
         this.detailImageService = detailImageService;
         this.skuImageService = skuImageService;
         this.videoService = videoService;
         this.imageFileService = imageFileService;
+        this.skuRenameService = skuRenameService;
     }
 
     // ==================== File Serve / Delete ====================
@@ -290,6 +289,30 @@ public class FileController {
         return String.format("%s,%s,%.1f,%.1f,(%.1f×1.5+0.0)+%.1f×1.2,%.2f,%.2f,%.2f,%d",
                 skuId, specName, originalPrice, shippingFee, originalPrice, shippingFee,
                 finalPrice, discountPrice, profit, stock);
+    }
+
+    // ==================== SKU Rename ====================
+
+    @PostMapping("/rename-sku")
+    public ResponseEntity<?> renameSku(@RequestBody Map<String, Object> request) {
+        try {
+            log.info("收到 rename-sku 请求: {}", request);
+            String productDir = (String) request.get("productDir");
+            String oldName = (String) request.get("oldName");
+            String newName = (String) request.get("newName");
+            log.info("解析参数: productDir=[{}], oldName=[{}], newName=[{}]", productDir, oldName, newName);
+            if (productDir == null || oldName == null || newName == null) {
+                return ResponseEntity.badRequest().body("缺少参数");
+            }
+            if (oldName.equals(newName)) {
+                return ResponseEntity.ok(Collections.singletonMap("message", "名称未变更"));
+            }
+            skuRenameService.renameSku(productDir, oldName, newName);
+            return ResponseEntity.ok(Collections.singletonMap("message", "已更新"));
+        } catch (Exception e) {
+            log.error("rename-sku 异常: ", e);
+            return ResponseEntity.badRequest().body("重命名失败: " + e.getMessage());
+        }
     }
 
     // ==================== Product Loading ====================
