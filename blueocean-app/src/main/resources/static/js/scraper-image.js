@@ -60,9 +60,6 @@ async function deleteImage(btn, filePath) {
                     } else {
                         if (isDetail) {
                             await reloadDetailImages(section);
-                            const grid = section.querySelector('.image-grid');
-                            await detailSyncReorder(grid, section);
-                            await reloadDetailImages(section);
                         } else {
                             item.remove();
                         }
@@ -258,9 +255,14 @@ async function confirmReplace() {
                     addAddPlaceholder(itemEl);
                     // Refresh SKU table if this is a SKU image
                     if (replaceTargetPath.indexOf('SKU图') >= 0) {
-                        const grid = itemEl.closest('.image-grid');
-                        const card = itemEl.closest('.product-card');
-                        if (grid && card) skuImageRefreshTable(card, grid);
+                        const placeholderRef = replacePlaceholderItem;
+                        setTimeout(() => {
+                            const itemEl2 = placeholderRef ? placeholderRef.closest('.img-item') : null;
+                            if (!itemEl2) return;
+                            const grid = itemEl2.closest('.image-grid');
+                            const card = itemEl2.closest('.product-card');
+                            if (grid && card) skuImageRefreshTable(card, grid);
+                        }, 50);
                     }
                 }
                 replaceIsPlaceholder = false; replacePlaceholderItem = null; replacePlaceholderName = null;
@@ -478,26 +480,48 @@ async function confirmUpload() {
                 const uploadBuffer = await fileBlob.arrayBuffer();
                 imageBackups.set(uploadTargetPath, { buffer: uploadBuffer, type: fileBlob.type || 'image/jpeg' });
             }
-            const newFileName = uploadTargetPath.split(/[\\/]/).pop();
-            const newFileUrl = toFileUrl(uploadTargetPath) + '?t=' + Date.now();
+            // 详情图：直接 reload 后端最新数据
+            if (uploadTargetPath.indexOf('详情图') >= 0) {
+                const section = uploadPlaceholderEl.closest('.section');
+                if (section) await reloadDetailImages(section);
+                showToast('已上传', 'success'); closeUploadModal();
+                return;
+            }
+            // SKU 图：更新 DOM + 刷新 table
+            if (uploadTargetPath.indexOf('SKU图') >= 0) {
+                const respPath = data.path || uploadTargetPath;
+                const newFileName = respPath.split(/[\\/]/).pop();
+                const newFileUrl = toFileUrl(respPath) + '?t=' + Date.now();
+                const itemEl = uploadPlaceholderEl.closest('.img-item');
+                itemEl.setAttribute('data-filepath', respPath);
+                itemEl.innerHTML = '<div class="img-wrap">' +
+                    '<img draggable="true" src="' + escapeHtml(newFileUrl) + '" onclick="showModal(this.src)" title="' + escapeHtml(newFileName) + '">' +
+                    '<div class="img-label">' + escapeHtml(newFileName) + '</div></div>' +
+                    '<div class="img-actions-bar">' +
+                    '<button class="action-btn btn-replace" data-path="' + escapeAttr(respPath) + '" onclick="replaceImageByAttr(this)">替换</button>' +
+                    '<button class="action-btn btn-delete" data-path="' + escapeAttr(respPath) + '" onclick="deleteImageByAttr(this)">删除</button></div>';
+                fillMissingMainImageSlots(itemEl.closest('.product-card'));
+                addAddPlaceholder(itemEl);
+                const grid = itemEl.closest('.image-grid');
+                const card = itemEl.closest('.product-card');
+                setTimeout(() => { if (grid && card) skuImageRefreshTable(card, grid); }, 50);
+                showToast('已上传', 'success'); closeUploadModal();
+                return;
+            }
+            // 主图等其他类型
+            const respPath = data.path || uploadTargetPath;
+            const newFileName = respPath.split(/[\\/]/).pop();
+            const newFileUrl = toFileUrl(respPath) + '?t=' + Date.now();
             const itemEl = uploadPlaceholderEl.closest('.img-item');
-            itemEl.setAttribute('data-filepath', uploadTargetPath);
+            itemEl.setAttribute('data-filepath', respPath);
             itemEl.innerHTML = '<div class="img-wrap">' +
                 '<img draggable="true" src="' + escapeHtml(newFileUrl) + '" onclick="showModal(this.src)" title="' + escapeHtml(newFileName) + '">' +
                 '<div class="img-label">' + escapeHtml(newFileName) + '</div></div>' +
                 '<div class="img-actions-bar">' +
-                '<button class="action-btn btn-replace" data-path="' + escapeAttr(uploadTargetPath) + '" onclick="replaceImageByAttr(this)">替换</button>' +
-                '<button class="action-btn btn-delete" data-path="' + escapeAttr(uploadTargetPath) + '" onclick="deleteImageByAttr(this)">删除</button></div>';
-            // Fill any missing main image slots with placeholders
+                '<button class="action-btn btn-replace" data-path="' + escapeAttr(respPath) + '" onclick="replaceImageByAttr(this)">替换</button>' +
+                '<button class="action-btn btn-delete" data-path="' + escapeAttr(respPath) + '" onclick="deleteImageByAttr(this)">删除</button></div>';
             fillMissingMainImageSlots(itemEl.closest('.product-card'));
-            // Add new "+" placeholder for detail/SKU images
             addAddPlaceholder(itemEl);
-            // Refresh SKU table last (after grid modifications are complete)
-            if (uploadTargetPath.indexOf('SKU图') >= 0) {
-                const grid = itemEl.closest('.image-grid');
-                const card = itemEl.closest('.product-card');
-                if (grid && card) skuImageRefreshTable(card, grid);
-            }
             showToast('已上传', 'success'); closeUploadModal();
         } else { showToast('上传失败: ' + (await resp.json()).error, 'error'); }
     } catch (e) { showToast('请求失败: ' + e.message, 'error'); }

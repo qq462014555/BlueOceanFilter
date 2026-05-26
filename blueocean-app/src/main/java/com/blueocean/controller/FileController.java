@@ -87,8 +87,8 @@ public class FileController {
             @RequestParam("targetPath") String targetPath,
             @RequestParam("file") MultipartFile file) throws IOException {
         try {
-            imageFileService.createFile(Paths.get(targetPath), file.getBytes());
-            return ResponseEntity.ok(Collections.singletonMap("path", targetPath));
+            Path path = imageFileService.createFileWithAutoNumber(Paths.get(targetPath), file.getBytes());
+            return ResponseEntity.ok(Collections.singletonMap("path", path.toString()));
         } catch (IOException e) {
             return ResponseEntity.badRequest().body("创建失败: " + e.getMessage());
         }
