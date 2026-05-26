@@ -1,5 +1,7 @@
 com\blueocean\entity\FilterTask.class
 com\blueocean\controller\FileManagerController$1.class
+com\blueocean\service\ImageFileService.class
+com\blueocean\service\MainImageService.class
 com\blueocean\ocr\PaddleOcrService.class
 com\blueocean\service\EmailNotificationService.class
 com\blueocean\config\AppProperties.class
@@ -13,6 +15,7 @@ com\blueocean\scraper\ProductScraper.class
 com\blueocean\mapper\TrendKeywordMapper.class
 com\blueocean\sku\extractor\CreateSpecAttrExtractor.class
 com\blueocean\sku\SkuFillService.class
+com\blueocean\service\DetailImageService.class
 com\blueocean\scraper\MerchantAttributeExtractor.class
 InspectSxkc.class
 com\blueocean\mapper\FilterTaskMapper.class
@@ -41,6 +44,7 @@ com\blueocean\controller\AttributeMappingController.class
 com\blueocean\scraper\UrlCleaner.class
 com\blueocean\controller\FileManagerController.class
 com\blueocean\scraper\SkuData.class
+com\blueocean\service\SkuImageService.class
 com\blueocean\controller\FileController.class
 com\blueocean\service\DashScopeClient.class
 com\blueocean\entity\KeywordResult.class
@@ -52,6 +56,7 @@ com\blueocean\config\ChromeDebugConfig.class
 com\blueocean\scraper\AttributeSaver.class
 com\blueocean\config\MailConfig.class
 com\blueocean\controller\OpenClawController.class
+com\blueocean\service\VideoService.class
 com\blueocean\config\WebConfig.class
 com\blueocean\scraper\QianniuAttributeScraper$AttributeField.class
 com\blueocean\controller\FilterController.class

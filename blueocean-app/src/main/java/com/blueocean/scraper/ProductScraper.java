@@ -711,8 +711,9 @@ public class ProductScraper {
 
     private String downloadVideo(ProductData product, String videoUrl) {
         String dir = product.getProductDir();
-        String fileName = sanitizeFileName(product.getTitle()) + ".mp4";
-        Path target = Paths.get(dir, fileName);
+        Path videoDir = Paths.get(dir, "视频");
+        try { Files.createDirectories(videoDir); } catch (IOException e) { /* ignore */ }
+        Path target = videoDir.resolve("视频.mp4");
 
         try {
             java.net.URI uri = URI.create(videoUrl);
@@ -723,7 +724,7 @@ public class ProductScraper {
             conn.setRequestProperty("Referer", "https://detail.1688.com/");
             try (java.io.InputStream is = conn.getInputStream()) {
                 Files.copy(is, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-                log.info("视频已下载: {}", fileName);
+                log.info("视频已下载: {}", target.getFileName());
                 return target.toString();
             }
         } catch (Exception e) {

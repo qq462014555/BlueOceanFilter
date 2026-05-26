@@ -49,6 +49,9 @@ function createByteCounter(input, saveBtn) {
 function startEditTitleFromText(textEl) {
     const titleContainer = textEl.closest('.product-title');
     if (titleContainer.querySelector('.product-title-input')) return;
+    // 隐藏静态字节计数器
+    const staticCounter = titleContainer.querySelector('.title-byte-count-static');
+    if (staticCounter) staticCounter.style.display = 'none';
     const currentTitle = textEl.textContent.trim();
     const input = document.createElement('input');
     input.type = 'text'; input.className = 'product-title-input'; input.value = currentTitle;
@@ -62,6 +65,9 @@ function startEditTitleFromText(textEl) {
 function startEditTitle(btn) {
     const titleContainer = btn.closest('.product-title');
     const textEl = titleContainer.querySelector('.title-text');
+    // 隐藏静态字节计数器
+    const staticCounter = titleContainer.querySelector('.title-byte-count-static');
+    if (staticCounter) staticCounter.style.display = 'none';
     const currentTitle = textEl.textContent.trim();
     const input = document.createElement('input');
     input.type = 'text'; input.className = 'product-title-input'; input.value = currentTitle;
@@ -92,11 +98,18 @@ async function saveTitle(btn) {
         if (contentType && contentType.includes('application/json')) data = await resp.json();
         else { const text = await resp.text(); data = { error: text }; }
         if (resp.ok) {
-            // 移除字节计数器
+            // 移除编辑时的字节计数器
             const counter = titleContainer.querySelector('.title-byte-counter');
             if (counter) counter.remove();
 
             input.outerHTML = '<span class="title-text">' + escapeHtml(newTitle) + '</span>';
+            // 恢复静态字节计数器
+            const newBytes = countBytes(newTitle);
+            const newColor = newBytes > DIR_TITLE_MAX_BYTES ? '#ff4d4f' : (newBytes > DIR_TITLE_MAX_BYTES * 0.8 ? '#fa8c16' : '#52c41a');
+            const editBtn = titleContainer.querySelector('.edit-btn');
+            if (editBtn) {
+                editBtn.insertAdjacentHTML('beforebegin', '<span class="title-byte-count-static" style="font-size:12px;color:' + newColor + ';white-space:nowrap;margin-left:8px;">' + newBytes + '/' + DIR_TITLE_MAX_BYTES + ' 字节</span>');
+            }
             const saveBtn = titleContainer.querySelector('.save-btn');
             if (saveBtn) saveBtn.outerHTML = '<button class="edit-btn" onclick="startEditTitle(this)">编辑</button>';
             const cancelBtn = titleContainer.querySelector('.cancel-btn');
@@ -126,6 +139,13 @@ function cancelEditTitle(btn) {
 
     const currentTitle = input.value.trim() || '未知商品';
     input.outerHTML = '<span class="title-text">' + escapeHtml(currentTitle) + '</span>';
+    // 恢复静态字节计数器
+    const cancelBytes = countBytes(currentTitle);
+    const cancelColor = cancelBytes > DIR_TITLE_MAX_BYTES ? '#ff4d4f' : (cancelBytes > DIR_TITLE_MAX_BYTES * 0.8 ? '#fa8c16' : '#52c41a');
+    const cancelEditBtn = titleContainer.querySelector('.edit-btn');
+    if (cancelEditBtn) {
+        cancelEditBtn.insertAdjacentHTML('beforebegin', '<span class="title-byte-count-static" style="font-size:12px;color:' + cancelColor + ';white-space:nowrap;margin-left:8px;">' + cancelBytes + '/' + DIR_TITLE_MAX_BYTES + ' 字节</span>');
+    }
     const saveBtn = titleContainer.querySelector('.save-btn');
     if (saveBtn) saveBtn.outerHTML = '<button class="edit-btn" onclick="startEditTitle(this)">编辑</button>';
     const cancelBtn2 = titleContainer.querySelector('.cancel-btn');

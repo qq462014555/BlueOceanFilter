@@ -8,7 +8,7 @@ function renderProduct(product) {
     container.insertAdjacentHTML('afterbegin', html);
     addSidebarItem(product.dirTitle || product.title || '未知商品', productId);
     const card = document.getElementById(productId);
-    if (card) setupImageDrag(card);
+    if (card) { setupMainImageDrag(card); setupDetailDrag(card); setupSkuImageDrag(card); setupSkuDrag(card); }
 }
 
 function renderLoadedProduct(product) {
@@ -19,7 +19,7 @@ function renderLoadedProduct(product) {
     container.insertAdjacentHTML('afterbegin', html);
     addSidebarItem(product.dirTitle || product.title || '未知商品', productId);
     const card = document.getElementById(productId);
-    if (card) setupImageDrag(card);
+    if (card) { setupMainImageDrag(card); setupDetailDrag(card); setupSkuImageDrag(card); setupSkuDrag(card); }
 }
 
 function buildProductCardHtml(product, isFromScrape) {
@@ -35,6 +35,10 @@ function buildProductCardHtml(product, isFromScrape) {
     html += '<div class="label">目录标题</div>';
     html += '<div class="product-title" data-product-dir="' + escapeAttr(product.productDir || '') + '">';
     html += '<span class="title-text" ondblclick="startEditTitleFromText(this)">' + escapeHtml(product.dirTitle || product.title || '未知商品') + '</span>';
+    const _dirTitle = product.dirTitle || product.title || '未知商品';
+    const _byteCount = countBytes(_dirTitle);
+    const _byteColor = _byteCount > DIR_TITLE_MAX_BYTES ? '#ff4d4f' : (_byteCount > DIR_TITLE_MAX_BYTES * 0.8 ? '#fa8c16' : '#52c41a');
+    html += '<span class="title-byte-count-static" style="font-size:12px;color:' + _byteColor + ';white-space:nowrap;margin-left:8px;">' + _byteCount + '/' + DIR_TITLE_MAX_BYTES + ' 字节</span>';
     html += '<button class="edit-btn" onclick="startEditTitle(this)">编辑</button>';
     html += '</div></div>';
     html += '<div class="product-meta">';
@@ -44,7 +48,7 @@ function buildProductCardHtml(product, isFromScrape) {
     html += '</div></div>';
 
     // Main images — always 5 slots
-    html += '<div class="section">';
+    html += '<div class="section" data-product-dir="' + escapeAttr(product.productDir || '') + '">';
     html += '<div class="section-title">主图 <span class="badge">' + (product.mainImages ? product.mainImages.length : 0) + '/5</span></div>';
     html += '<div class="image-grid">';
     var mainImgCount = product.mainImages ? product.mainImages.length : 0;
@@ -80,14 +84,20 @@ function buildProductCardHtml(product, isFromScrape) {
 
     // Detail images
     if (product.detailImages && product.detailImages.length > 0) {
-        html += '<div class="section" data-product-dir="' + escapeAttr(product.productDir || '') + '">';
-        html += '<div class="section-title">详情图 <span class="badge">' + product.detailImages.length + '</span></div>';
+        html += '<div class="section detail-section" data-product-dir="' + escapeAttr(product.productDir || '') + '">';
+        html += '<div class="section-title">详情图 <span class="badge">' + product.detailImages.length + '</span>';
+        html += '<span class="batch-bar" id="batchBar-detail">';
+        html += '<input type="checkbox" id="batchCheckAllDetail" onchange="toggleBatchCheckAll(this, \'detail\')" title="全选">';
+        html += '<span class="batch-count" id="batchCountDetail">已选 0</span>';
+        html += '<button class="batch-btn danger" onclick="batchDeleteSelected(\'detail\')">删除选中</button>';
+        html += '</span></div>';
         html += '<div class="image-grid">';
         product.detailImages.forEach((img) => {
             const fileName = img ? img.split(/[\\/]/).pop() : '';
             html += '<div class="img-item" data-filepath="' + escapeAttr(img) + '">';
-            html += '<div class="img-wrap">';
-            html += '<img draggable="true" src="' + escapeHtml(img ? toFileUrl(img) : '') + '?t=' + Date.now() + '" onclick="showModal(this.src)" title="' + escapeHtml(fileName) + '">';
+            html += '<input type="checkbox" class="img-checkbox" data-section="detail" onclick="event.stopPropagation()" onchange="onImgCheck(this)" title="选中">';
+            html += '<div class="img-wrap" onclick="toggleDetailCheck(this, event)" ondblclick="showModal(this.querySelector(\'img\').src)">';
+            html += '<img draggable="true" src="' + escapeHtml(img ? toFileUrl(img) : '') + '?t=' + Date.now() + '" title="' + escapeHtml(fileName) + '">';
             html += '<div class="img-label">' + escapeHtml(fileName) + '</div>';
             html += '</div>';
             html += '<div class="img-actions-bar">';
@@ -106,15 +116,38 @@ function buildProductCardHtml(product, isFromScrape) {
 
     // Video
     if (product.videoUrl) {
+        const videoFileName = product.videoUrl.split(/[\\/]/).pop();
+        html += '<div class="section" data-product-dir="' + escapeAttr(product.productDir || '') + '">';
+        html += '<div class="section-title">商品视频</div>';
+        html += '<div class="video-item" data-filepath="' + escapeAttr(product.videoUrl) + '">';
+        html += '<div class="video-wrap">';
         const videoSrc = isFromScrape
             ? (product.videoUrl.startsWith('http') || product.videoUrl.startsWith('//') || product.videoUrl.startsWith('data:')
                 ? (product.videoUrl.startsWith('//') ? 'https:' + product.videoUrl : product.videoUrl)
                 : toFileUrl(product.videoUrl) + '?t=' + Date.now())
             : toFileUrl(product.videoUrl) + '?t=' + Date.now();
-        html += '<div class="section">';
-        html += '<div class="section-title">商品视频</div>';
-        html += '<video style="max-width:100%;max-height:400px;border-radius:8px;" controls preload="metadata"><source src="' + escapeHtml(videoSrc) + '" type="video/mp4"></video>';
+        html += '<video style="max-width:100%;max-height:300px;border-radius:8px;" controls preload="metadata"><source src="' + escapeHtml(videoSrc) + '" type="video/mp4"></video>';
+        html += '<div class="video-label">' + escapeHtml(videoFileName) + '</div>';
         html += '</div>';
+        html += '<div class="video-actions-bar">';
+        html += '<button class="action-btn btn-replace" data-path="' + escapeAttr(product.videoUrl) + '" onclick="replaceVideo(this)">替换</button>';
+        html += '<button class="action-btn restore-btn btn-restore" data-path="' + escapeAttr(product.videoUrl) + '" onclick="restoreVideo(this)" style="display:none">复原</button>';
+        html += '<button class="action-btn btn-delete" data-path="' + escapeAttr(product.videoUrl) + '" onclick="deleteVideo(this)">删除</button>';
+        html += '</div></div></div>';
+    } else {
+        // No video - show placeholder upload box
+        const videoPath = (product.productDir || '') + '\\视频\\视频.mp4';
+        html += '<div class="section" data-product-dir="' + escapeAttr(product.productDir || '') + '">';
+        html += '<div class="section-title">商品视频</div>';
+        html += '<div class="video-item" data-filepath="' + escapeAttr(videoPath) + '">';
+        html += '<div class="video-placeholder" onclick="openVideoUploadModal(this, \'' + escapeJs(videoPath) + '\')">';
+        html += '<div class="placeholder-icon">+</div>';
+        html += '<div class="placeholder-text">添加视频</div>';
+        html += '</div>';
+        html += '<div class="video-actions-bar">';
+        html += '<button class="action-btn btn-replace" data-path="' + escapeAttr(videoPath) + '" onclick="replaceVideoPlaceholder(this)">替换</button>';
+        html += '<button class="action-btn btn-delete" data-path="' + escapeAttr(videoPath) + '" onclick="deleteVideo(this)">删除</button>';
+        html += '</div></div></div>';
     }
 
     // Attributes
@@ -152,37 +185,61 @@ function buildProductCardHtml(product, isFromScrape) {
         html += '</tbody></table></div>';
     }
 
-    // SKU images
+    // SKU images — slots match SKU count, position by filename number
     if (product.skuImages && product.skuImages.length > 0) {
-        html += '<div class="section" data-product-dir="' + escapeAttr(product.productDir || '') + '">';
-        html += '<div class="section-title">SKU图 <span class="badge">' + product.skuImages.length + '</span></div>';
-        html += '<div class="image-grid">';
+        const skuCount = product.skus ? product.skus.length : product.skuImages.length;
+        const totalSlots = Math.max(skuCount, product.skuImages.length);
+
+        // Map file paths to their slot numbers (from filename "SKU图_03.jpg" → slot 3)
+        const slotMap = [];
         product.skuImages.forEach((img) => {
             const fileName = img.split(/[\\/]/).pop();
-            html += '<div class="img-item" data-filepath="' + escapeAttr(img) + '">';
-            html += '<div class="img-wrap">';
-            html += '<img draggable="true" src="' + escapeHtml(toFileUrl(img)) + '?t=' + Date.now() + '" onclick="showModal(this.src)" title="' + escapeHtml(fileName) + '">';
-            html += '<div class="img-label">' + escapeHtml(fileName) + '</div>';
-            html += '</div>';
-            html += '<div class="img-actions-bar">';
-            html += '<button class="action-btn btn-replace" data-path="' + escapeAttr(img) + '" onclick="replaceImageByAttr(this)">替换</button>';
-            html += '<button class="action-btn restore-btn btn-restore" data-path="' + escapeAttr(img) + '" onclick="restoreImageByAttr(this)">复原</button>';
-            html += '<button class="action-btn btn-delete" data-path="' + escapeAttr(img) + '" onclick="deleteImageByAttr(this)">删除</button>';
-            html += '</div></div>';
+            const match = fileName.match(/SKU图_(\d+)/);
+            if (match) {
+                const slotNum = parseInt(match[1], 10);
+                slotMap[slotNum] = img;
+            }
         });
-        html += '<div class="img-item">';
-        html += '<div class="img-placeholder" onclick="addSkuImage(this)">';
-        html += '<div class="placeholder-icon">+</div>';
-        html += '<div class="placeholder-text">添加图</div>';
-        html += '</div></div>';
+
+        html += '<div class="section" data-product-dir="' + escapeAttr(product.productDir || '') + '">';
+        html += '<div class="section-title">SKU图 <span class="badge">' + totalSlots + '</span></div>';
+        html += '<div class="image-grid">';
+        for (var si = 1; si <= totalSlots; si++) {
+            var siFile = slotMap[si] || null;
+            if (siFile) {
+                var siName = siFile.split(/[\\/]/).pop();
+                html += '<div class="img-item" data-filepath="' + escapeAttr(siFile) + '">';
+                html += '<div class="img-wrap">';
+                html += '<img draggable="true" src="' + escapeHtml(toFileUrl(siFile)) + '?t=' + Date.now() + '" onclick="showModal(this.src)" title="' + escapeHtml(siName) + '">';
+                html += '<div class="img-label">' + escapeHtml(siName) + '</div>';
+                html += '</div>';
+                html += '<div class="img-actions-bar">';
+                html += '<button class="action-btn btn-replace" data-path="' + escapeAttr(siFile) + '" onclick="replaceImageByAttr(this)">替换</button>';
+                html += '<button class="action-btn restore-btn btn-restore" data-path="' + escapeAttr(siFile) + '" onclick="restoreImageByAttr(this)">复原</button>';
+                html += '<button class="action-btn btn-delete" data-path="' + escapeAttr(siFile) + '" onclick="deleteImageByAttr(this)">删除</button>';
+                html += '</div></div>';
+            } else {
+                var siPlaceholderName = 'SKU图_' + String(si).padStart(2, '0') + '.jpg';
+                var siPlaceholderPath = (product.productDir || '') + '\\SKU图\\' + siPlaceholderName;
+                html += '<div class="img-item" data-filepath="' + escapeAttr(siPlaceholderPath) + '">';
+                html += '<div class="img-placeholder" onclick="openUploadModal(this, \'' + escapeJs(siPlaceholderPath) + '\', \'SKU图_' + String(si).padStart(2, '0') + '\')">';
+                html += '<div class="placeholder-icon">+</div>';
+                html += '<div class="placeholder-text">' + escapeHtml(siPlaceholderName) + '</div>';
+                html += '</div>';
+                html += '<div class="img-actions-bar">';
+                html += '<button class="action-btn btn-replace" data-path="' + escapeAttr(siPlaceholderPath) + '" onclick="replacePlaceholder(this)">替换</button>';
+                html += '<button class="action-btn btn-delete" data-path="' + escapeAttr(siPlaceholderPath) + '" onclick="deleteImageByAttr(this)">删除</button>';
+                html += '</div></div>';
+            }
+        }
         html += '</div></div>';
     }
 
     // SKU price table
     if (product.skus && product.skus.length > 0) {
-        html += '<div class="section">';
+        html += '<div class="section" data-product-dir="' + escapeAttr(product.productDir || '') + '">';
         html += '<div class="section-title">SKU 信息 <span class="badge">' + product.skus.length + '</span></div>';
-        html += '<table class="sku-table">';
+        html += '<table class="sku-table sku-table-draggable">';
         let fieldNames = [];
         if (product.skus.length > 0 && product.skus[0].detailFields) {
             const parts = product.skus[0].detailFields.split(', ');
@@ -192,8 +249,8 @@ function buildProductCardHtml(product, isFromScrape) {
         for (const fn of fieldNames) html += '<th>' + escapeHtml(fn) + '</th>';
         html += '<th>批发价</th><th>最终价格</th><th>8折价</th><th>利润</th><th>库存</th></tr></thead>';
         html += '<tbody>';
-        product.skus.forEach(sku => {
-            html += '<tr>';
+        product.skus.forEach((sku, idx) => {
+            html += '<tr class="sku-row" data-sku-index="' + idx + '" data-sku-id="' + escapeAttr(sku.skuId || '') + '">';
             html += '<td>' + (sku.imageUrl ? '<img class="sku-img" src="' + escapeHtml(sku.imageUrl.startsWith('http') || sku.imageUrl.startsWith('data:') ? sku.imageUrl : toFileUrl(sku.imageUrl) + '?t=' + Date.now()) + '" onclick="showModal(this.src)">' : '-') + '</td>';
             html += '<td>' + escapeHtml(sku.specName || '-') + '</td>';
             if (sku.detailFields) {

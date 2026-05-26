@@ -1,6 +1,7 @@
 package com.blueocean.controller;
 
 import com.blueocean.scraper.QianniuAttributeScraper;
+import com.blueocean.service.AttributeAutoFillService;
 import com.blueocean.util.ClaudeSignal;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,9 +22,12 @@ public class QianniuAttributeController {
     private static final Logger log = LoggerFactory.getLogger(QianniuAttributeController.class);
 
     private final QianniuAttributeScraper scraper;
+    private final AttributeAutoFillService autoFillService;
 
-    public QianniuAttributeController(@Value("${app.output-dir:output}") String outputDir) {
+    public QianniuAttributeController(@Value("${app.output-dir:output}") String outputDir,
+                                      AttributeAutoFillService autoFillService) {
         this.scraper = new QianniuAttributeScraper(outputDir);
+        this.autoFillService = autoFillService;
     }
 
     @PostMapping("/test-connection")
@@ -37,6 +41,38 @@ public class QianniuAttributeController {
     public ResponseEntity<Map<String, Object>> extract() {
         log.info("开始提取千牛商品属性");
         Map<String, Object> result = scraper.extract();
+
+        // 1. 提取成功后，自动调用属性填充
+        if (Boolean.TRUE.equals(result.get("success"))) {
+            String title = (String) result.get("title");
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> fields = (List<Map<String, Object>>) result.get("fields");
+            if (title != null && fields != null && !fields.isEmpty()) {
+                try {
+                    log.info("提取成功，自动调用属性填充: title={}, fields={}", title, fields.size());
+                    Map<String, Object> fillResult = autoFillService.autoFill(title, fields);
+                    if (Boolean.TRUE.equals(fillResult.get("success"))) {
+                        result.put("autoFillResult", fillResult);
+
+                        // 2. AI 填充成功后，执行 fill-fields 逻辑
+                        Path aiBackPath = findAiBackFile(title);
+                        if (aiBackPath != null) {
+                            log.info("AI 填充成功，发送 Claude 填写信号: {}", aiBackPath);
+                            ClaudeSignal.fillFields(aiBackPath.toString(), "QianniuAttributeController", title);
+                            result.put("fillFieldsSignaled", true);
+                            result.put("fillFieldsPath", aiBackPath.toString());
+                        } else {
+                            log.warn("未找到 qianniu_attr_ai_back.json，跳过 Claude 填写信号");
+                        }
+                    } else {
+                        log.warn("属性自动填充失败: {}", fillResult.get("error"));
+                    }
+                } catch (Exception e) {
+                    log.warn("属性自动填充异常: {}", e.getMessage());
+                }
+            }
+        }
+
         return ResponseEntity.ok(result);
     }
 

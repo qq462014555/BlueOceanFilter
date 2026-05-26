@@ -7,13 +7,14 @@ function addSidebarItem(title, targetId) {
     const link = document.createElement('a');
     link.className = 'sidebar-item';
     link.textContent = title;
-    link.href = '#' + targetId;
+    link.href = '/scraper.html?p=' + encodeURIComponent(title);
     link.onclick = function(e) {
         e.preventDefault();
         document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
         link.classList.add('active');
         const target = document.getElementById(targetId);
         if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        window.history.pushState(null, '', '/scraper.html?p=' + encodeURIComponent(title));
     };
     items.insertBefore(link, items.firstChild);
 }
@@ -60,6 +61,7 @@ async function loadProductsByDate() {
             const products = await resp.json();
             document.getElementById('results').innerHTML = '';
             document.getElementById('sidebarItems').innerHTML = '';
+            if (typeof _sidebarIndex !== 'undefined') _sidebarIndex = 0;
             if (products.length > 0) {
                 products.forEach(p => renderLoadedProduct(p));
                 statusEl.textContent = '已加载 ' + products.length + ' 个商品';

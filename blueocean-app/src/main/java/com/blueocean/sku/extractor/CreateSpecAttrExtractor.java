@@ -129,12 +129,12 @@ public class CreateSpecAttrExtractor implements SkuAttrExtractor {
             return List.of();
         }
 
-        // 3. 从刷新后的 .multi-sale-props 区域提取已选的 SKU 属性
+        // 3. 从刷新后的 .multi-sale-props 区域提取所有的 SKU 属性
         @SuppressWarnings("unchecked")
         List<String> props = (List<String>) page.evaluate("""
                 () => {
                   // 等待内容刷新
-                  const items = document.querySelectorAll('.multi-sale-props .prop-item.selected span');
+                  const items = document.querySelectorAll('.multi-sale-props .prop-item span');
                   const props = [];
                   for (const item of items) {
                     const text = item.textContent.trim();
@@ -154,7 +154,7 @@ public class CreateSpecAttrExtractor implements SkuAttrExtractor {
      * @param page 页面
      * @param aiResultJsonPath sku-ai-result.json 文件路径
      */
-    public void fillSku(Page page, String aiResultJsonPath) {
+    public void fillSku(Page page, String aiResultJsonPath,List<String> qianniuSkuProps) {
         try {
             // 1. 读取 AI 结果
             String json = Files.readString(Path.of(aiResultJsonPath), StandardCharsets.UTF_8);
@@ -166,24 +166,23 @@ public class CreateSpecAttrExtractor implements SkuAttrExtractor {
             java.util.List<String> targetAttrs = new java.util.ArrayList<>();
             java.util.Map<String, java.util.List<String>> attrOptions = new java.util.LinkedHashMap<>();
 
+            Boolean runsSelectSignRadio = false;
+            //ai反馈走单个时候，尽可能走 多层单个属性
             if (levels == null || levels.isEmpty()) {
-                // levels 为空说明页面只有一个默认属性，复用 extract 方法获取
-                List<String> extracted = extract(page);
-                if (extracted.isEmpty()) return;
-                // 从 single 数组提取 name 作为选项值
-                JSONArray singles = aiResult.getJSONArray("single");
+                JSONArray options = aiResult.getJSONArray("single");
                 java.util.List<String> opts = new java.util.ArrayList<>();
-                if (singles != null) {
-                    for (int i = 0; i < singles.size(); i++) {
-                        JSONObject single = singles.getJSONObject(i);
-                        String name = single.getString("name");
-                        if (name != null && !name.trim().isEmpty()) opts.add(name);
-                    }
+                for (int j = 0; j < options.size(); j++) {
+                    JSONObject o = options.getJSONObject(j);
+                    String name = o.getString("name");
+                    opts.add(name);
                 }
-                if (opts.isEmpty()) opts.add("");
-                for (String attr : extracted) {
-                    targetAttrs.add(attr);
-                    attrOptions.put(attr, opts);
+                if( qianniuSkuProps.stream().anyMatch(prop -> "颜色分类".equalsIgnoreCase(prop.trim()))){
+                    targetAttrs.add("颜色分类");
+                    attrOptions.put("颜色分类", opts);
+                    runsSelectSignRadio = true;
+                }else {
+                    targetAttrs.add("商品规格");
+                    attrOptions.put("商品规格", opts);
                 }
             } else {
                 for (int i = 0; i < levels.size(); i++) {
@@ -205,15 +204,17 @@ public class CreateSpecAttrExtractor implements SkuAttrExtractor {
 
             // 2. 已经进入 没必要（点击"+ 创建规格"按钮（复用已有逻辑）)
 
-            //属性超过2个才会进入
-            if(levels!=null && levels.size()>1) {
+            if((levels!=null && levels.size()>0)||runsSelectSignRadio) {
 
                 // 3. 选择"选择标准属性构建规格"
                 selectStandardSpecRadio(page);
-
-                // 4. 依次勾选 AI 结果中存在的属性
+                // 4. 取消默认选中的属性
+                deselectAllProps(page);
+                // 5. 依次勾选 AI 结果中存在的属性
                 selectTargetAttrs(page, targetAttrs);
-            }
+            }else{
+                selectSignRadio(page);
+           }
 
             // 6. 页面动态换位后，重新获取属性布局
             page.waitForTimeout(1500);
@@ -257,6 +258,35 @@ public class CreateSpecAttrExtractor implements SkuAttrExtractor {
     }
 
     /**
+     * 选择"单层展示·自定义填写规格"单选
+     */
+    private void selectSignRadio(Page page) {
+        Object radioCoords = page.evaluate("""
+                () => {
+                  const radios = document.querySelectorAll('.next-radio-wrapper');
+                  for (const radio of radios) {
+                    const label = radio.querySelector('.next-radio-label');
+                    if (label && label.textContent.trim().includes('自定义填写规格')) {
+                      const rect = radio.getBoundingClientRect();
+                      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+                    }
+                  }
+                  return null;
+                }
+                """);
+        if (radioCoords == null) return;
+        @SuppressWarnings("unchecked")
+        Map<String, Object> coords = (Map<String, Object>) radioCoords;
+        double x = ((Number) coords.get("x")).doubleValue();
+        double y = ((Number) coords.get("y")).doubleValue();
+        page.waitForTimeout(300);
+        page.mouse().move(x, y);
+        page.waitForTimeout(200);
+        page.mouse().click(x, y);
+        page.waitForTimeout(1000);
+    }
+
+    /**
      * 选择"选择标准属性构建规格"单选
      */
     private void selectStandardSpecRadio(Page page) {
@@ -283,6 +313,23 @@ public class CreateSpecAttrExtractor implements SkuAttrExtractor {
         page.waitForTimeout(200);
         page.mouse().click(x, y);
         page.waitForTimeout(1000);
+    }
+
+    /**
+     * 取消所有默认选中的属性（prop-item.selected → prop-item）
+     */
+    private void deselectAllProps(Page page) {
+        page.evaluate("""
+                () => {
+                  const propItems = document.querySelectorAll('.multi-sale-props .prop-item.selected');
+                  for (const item of propItems) {
+                    const cb = item.querySelector('.next-checkbox input, input[type="checkbox"], .prop-item-check');
+                    if (cb && cb.checked) { cb.click(); }
+                    else { item.click(); }
+                  }
+                }
+                """);
+        page.waitForTimeout(800);
     }
 
     /**
@@ -419,7 +466,8 @@ public class CreateSpecAttrExtractor implements SkuAttrExtractor {
     }
 
     /**
-     * 按 index 定位 .color-sub-items 下的 input 并填写（绕过 React setter），填完后光标在最后然后失焦
+     * 按 index 定位 input 并填写（绕过 React setter），填完后光标在最后然后失焦
+     * 支持两种页面结构：新格式（商品规格 + .sale-props-auto-crop-pic-common-wrap）和旧格式（.color-sub-items 在 .common-wrap 内）
      */
     private void fillInputByIndex(Page page, String attrName, String value, int index) {
         page.evaluate("""
@@ -427,6 +475,25 @@ public class CreateSpecAttrExtractor implements SkuAttrExtractor {
                   const { attrName, value, index } = data;
                   const saleProps = document.querySelector('.sell-component-sale-props');
                   if (!saleProps) return false;
+
+                  // 新格式：.sale-props-auto-crop-pic-common-wrap 包含输入框
+                  const autoCropWrap = saleProps.querySelector('.sale-props-auto-crop-pic-common-wrap');
+                  if (autoCropWrap) {
+                    const inputs = autoCropWrap.querySelectorAll('.color-sub-items input');
+                    if (inputs.length > index) {
+                      const input = inputs[index];
+                      input.scrollIntoView({ block: 'center' });
+                      const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+                      nativeSetter.call(input, value);
+                      input.dispatchEvent(new Event('input', { bubbles: true }));
+                      input.dispatchEvent(new Event('change', { bubbles: true }));
+                      input.focus();
+                      input.setSelectionRange(input.value.length, input.value.length);
+                      return true;
+                    }
+                  }
+
+                  // 旧格式：input 在 .common-wrap 内
                   const wraps = saleProps.querySelectorAll('.common-wrap');
                   for (const wrap of wraps) {
                     const label = wrap.querySelector('.props-label');
@@ -459,6 +526,21 @@ public class CreateSpecAttrExtractor implements SkuAttrExtractor {
                 (attrName) => {
                   const saleProps = document.querySelector('.sell-component-sale-props');
                   if (!saleProps) return null;
+
+                  // 新格式：.sale-props-auto-crop-pic-common-wrap 里的 + 按钮
+                  const autoCropWrap = saleProps.querySelector('.sale-props-auto-crop-pic-common-wrap');
+                  if (autoCropWrap) {
+                    const addBtn = autoCropWrap.querySelector('button.add');
+                    if (addBtn) {
+                      addBtn.scrollIntoView({ block: 'center' });
+                      const rect = addBtn.getBoundingClientRect();
+                      if (rect.width > 0 && rect.height > 0) {
+                        return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+                      }
+                    }
+                  }
+
+                  // 旧格式：+ 按钮在 .common-wrap 内
                   const wraps = saleProps.querySelectorAll('.common-wrap');
                   for (const wrap of wraps) {
                     const label = wrap.querySelector('.props-label');
@@ -531,6 +613,14 @@ public class CreateSpecAttrExtractor implements SkuAttrExtractor {
                 (attrName) => {
                   const saleProps = document.querySelector('.sell-component-sale-props');
                   if (!saleProps) return 0;
+
+                  // 新格式：.sale-props-auto-crop-pic-common-wrap
+                  const autoCropWrap = saleProps.querySelector('.sale-props-auto-crop-pic-common-wrap');
+                  if (autoCropWrap) {
+                    return autoCropWrap.querySelectorAll('.color-sub-items input').length;
+                  }
+
+                  // 旧格式：在 .common-wrap 内
                   const wraps = saleProps.querySelectorAll('.common-wrap');
                   for (const wrap of wraps) {
                     const label = wrap.querySelector('.props-label');

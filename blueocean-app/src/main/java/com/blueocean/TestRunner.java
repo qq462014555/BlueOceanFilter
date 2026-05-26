@@ -7,26 +7,27 @@ package com.blueocean;
 public class TestRunner {
 
     public static void main(String[] args) throws Exception {
-      //  填写sku1();
-        //填写价格库存2();
-        上传sku图片();
+        填写sku1();
+       // 填写价格库存2();
+        //sku图片();
     }
 
 
     public static void 填写sku1() throws Exception {
         test("填写sku", "http://localhost:8080/api/sku-fill/fill-to-page",
-                "{\"productDir\":\"C:\\\\Users\\\\46201\\\\Documents\\\\无极RPA文件处理\\\\2026年05月24日14时42分_1688链接\\\\玩具_童车_益智_积木_模型_手工制作_创意DIY_其他手工制作\\\\可穿戴纸箱机器人儿童手工 DIY 拼装涂色机甲铠甲趣味益智玩具\"}");
+                "{\"productDir\":\"C:\\\\Users\\\\46201\\\\Documents\\\\无极RPA文件处理\\\\2026年05月25日18时04分_1688链接\\\\玩具_童车_益智_积木_模型_仿真_过家家玩具_过家家玩具\\\\趣味双语雪糕车仿真冰淇淋售卖车过家家玩具儿童手推互动音乐益智\"}");
+
 
     }
     public static void 填写价格库存2() throws Exception {
         test("填写价格库存", "http://localhost:8080/api/sku-fill/test-fill-price-stock",
-                "{\"productDir\":\"C:\\\\Users\\\\46201\\\\Documents\\\\无极RPA文件处理\\\\2026年05月24日14时42分_1688链接\\\\玩具_童车_益智_积木_模型_手工制作_创意DIY_其他手工制作\\\\可穿戴纸箱机器人儿童手工 DIY 拼装涂色机甲铠甲趣味益智玩具\"}");
+                "{\"productDir\":\"C:\\\\Users\\\\46201\\\\Documents\\\\无极RPA文件处理\\\\2026年05月25日18时04分_1688链接\\\\玩具_童车_益智_积木_模型_仿真_过家家玩具_过家家玩具\\\\趣味双语雪糕车仿真冰淇淋售卖车过家家玩具儿童手推互动音乐益智\"}");
 
     }
 
     public static void 上传sku图片() throws Exception {
         test("上传sku图片", "http://localhost:8080/api/sku-fill/test-fill-sku-image",
-                "{\"productDir\":\"C:\\\\Users\\\\46201\\\\Documents\\\\无极RPA文件处理\\\\2026年05月24日14时42分_1688链接\\\\玩具_童车_益智_积木_模型_手工制作_创意DIY_其他手工制作\\\\可穿戴纸箱机器人儿童手工 DIY 拼装涂色机甲铠甲趣味益智玩具\"}");
+                "{\"productDir\":\"C:\\\\Users\\\\46201\\\\Documents\\\\无极RPA文件处理\\\\2026年05月25日18时04分_1688链接\\\\玩具_童车_益智_积木_模型_仿真_过家家玩具_过家家玩具\\\\趣味双语雪糕车仿真冰淇淋售卖车过家家玩具儿童手推互动音乐益智\"}");
 
     }
 

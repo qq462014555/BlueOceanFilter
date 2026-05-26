@@ -26,7 +26,9 @@ function deleteImageByAttr(btn) {
 async function deleteImage(btn, filePath) {
     if (!filePath || filePath.startsWith('http://') || filePath.startsWith('https://') || filePath.startsWith('data:')) {
         const item = btn.closest('.img-item');
-        const isMainImage = item.closest('.section').querySelector('.section-title').textContent.startsWith('主图');
+        const section = item.closest('.section');
+        const titleEl = section.querySelector('.section-title');
+        const isMainImage = titleEl.textContent.startsWith('主图');
         if (isMainImage) replaceWithPlaceholder(item);
         else item.remove();
         return;
@@ -43,8 +45,28 @@ async function deleteImage(btn, filePath) {
                 else { const text = await resp.text(); data = resp.ok ? { message: text } : { error: text }; }
                 if (resp.ok) {
                     const item = btn.closest('.img-item');
-                    const isMainImage = item.closest('.section').querySelector('.section-title').textContent.startsWith('主图');
-                    if (isMainImage) replaceWithPlaceholder(item); else item.remove();
+                    const section = item.closest('.section');
+                    const titleEl = section.querySelector('.section-title');
+                    const isMainImage = titleEl.textContent.startsWith('主图');
+                    const isDetail = titleEl.textContent.startsWith('详情图');
+                    const isSkuImage = titleEl.textContent.startsWith('SKU图');
+                    if (isMainImage) {
+                        replaceWithPlaceholder(item);
+                    } else if (isSkuImage) {
+                        const grid = item.closest('.image-grid');
+                        const card = item.closest('.product-card');
+                        replaceSkuWithPlaceholder(item);
+                        skuImageRefreshTable(card, grid);
+                    } else {
+                        if (isDetail) {
+                            await reloadDetailImages(section);
+                            const grid = section.querySelector('.image-grid');
+                            await detailSyncReorder(grid, section);
+                            await reloadDetailImages(section);
+                        } else {
+                            item.remove();
+                        }
+                    }
                     showToast('已删除', 'success');
                 } else { showToast('删除失败: ' + (data.error || data.message), 'error'); }
             } catch (e) { showToast('请求失败: ' + e.message, 'error'); }
@@ -87,6 +109,32 @@ function replaceWithPlaceholderInner(itemEl, filePath, numStr) {
         '<div class="img-actions-bar">' +
         '<button class="action-btn btn-replace" data-path="' + escapeAttr(filePath) + '" onclick="replacePlaceholder(this)">替换</button>' +
         '<button class="action-btn btn-delete" data-path="' + escapeAttr(filePath) + '" onclick="deleteImageByAttr(this)">删除</button>' +
+        '</div></div>';
+    itemEl.outerHTML = placeholderHtml;
+}
+
+/**
+ * SKU 图删除后变占位框（不重编号，保留空位）
+ */
+function replaceSkuWithPlaceholder(itemEl) {
+    const grid = itemEl.closest('.image-grid');
+    const allItems = grid.querySelectorAll('.img-item');
+    const index = Array.from(allItems).indexOf(itemEl);
+    const numStr = String(index + 1).padStart(2, '0');
+    const placeholderName = 'SKU图_' + numStr + '.jpg';
+    const card = itemEl.closest('.product-card');
+    const dirEl = card ? card.querySelector('.product-title[data-product-dir]') : null;
+    const productDir = dirEl ? dirEl.getAttribute('data-product-dir') || '' : '';
+    const placeholderPath = productDir + '\\SKU图\\' + placeholderName;
+
+    const placeholderHtml = '<div class="img-item" data-filepath="' + escapeAttr(placeholderPath) + '">' +
+        '<div class="img-placeholder" onclick="openUploadModal(this, \'' + escapeJs(placeholderPath) + '\', \'SKU图_' + numStr + '\')">' +
+        '<div class="placeholder-icon">+</div>' +
+        '<div class="placeholder-text">' + escapeHtml(placeholderName) + '</div>' +
+        '</div>' +
+        '<div class="img-actions-bar">' +
+        '<button class="action-btn btn-replace" data-path="' + escapeAttr(placeholderPath) + '" onclick="replacePlaceholder(this)">替换</button>' +
+        '<button class="action-btn btn-delete" data-path="' + escapeAttr(placeholderPath) + '" onclick="deleteImageByAttr(this)">删除</button>' +
         '</div></div>';
     itemEl.outerHTML = placeholderHtml;
 }
@@ -160,47 +208,38 @@ async function confirmReplace() {
     if (!replaceTargetPath || !replaceSelectedPath) return;
 
     const btn = replaceTargetBtn;
-    btn.textContent = '...'; btn.disabled = true;
+    if (!btn) return;
+    try { btn.textContent = '...'; btn.disabled = true; } catch(e) {}
 
     try {
-        // Step 1: Backup original image BEFORE replacing (blocking)
         let originalBuffer = null;
         let originalType = null;
         if (!replaceIsPlaceholder && !imageBackups.has(replaceTargetPath)) {
             const backupUrl = toFileUrl(replaceTargetPath) + '?t=' + Date.now();
-            console.log('备份原始图片: URL=', backupUrl);
             const backupResp = await fetch(backupUrl);
-            console.log('备份响应:', backupResp.status, backupResp.headers.get('content-type'));
             if (!backupResp.ok) {
                 throw new Error('备份原始图片失败: HTTP ' + backupResp.status);
             }
             originalBuffer = await backupResp.arrayBuffer();
             originalType = backupResp.headers.get('content-type') || 'image/jpeg';
-            console.log('备份成功: buffer大小=', originalBuffer.byteLength, '类型=', originalType);
         } else if (imageBackups.has(replaceTargetPath)) {
             const entry = imageBackups.get(replaceTargetPath);
             originalBuffer = entry.buffer;
             originalType = entry.type;
-            console.log('已有备份，大小=', originalBuffer.byteLength);
         }
 
-        // Step 2: Fetch the selected replacement image
         const fetchUrl = replaceSelectedPath.split('?')[0] + '?t=' + Date.now();
         const imgResp = await fetch(fetchUrl);
         if (!imgResp.ok) throw new Error('图片获取失败: ' + imgResp.status);
         const imgBuffer = await imgResp.arrayBuffer();
         const imgFile = new File([imgBuffer], 'image.jpg', { type: imgResp.headers.get('content-type') || 'image/jpeg' });
-        console.log('替换图片:', imgFile.name, imgFile.size, 'bytes, 类型:', imgFile.type);
 
-        // Step 3: Send replacement request
         const endpoint = replaceIsPlaceholder ? '/api/files/create-image' : '/api/files/replace-image';
         const formData = new FormData();
         formData.append('targetPath', replaceTargetPath);
         formData.append('file', imgFile, 'image.jpg');
-        console.log('发送到:', endpoint, '路径:', replaceTargetPath);
         const resp = await fetch(endpoint, { method: 'POST', body: formData });
         const data = await resp.json();
-        console.log('替换响应:', resp.status, JSON.stringify(data));
         if (resp.ok) {
             if (replaceIsPlaceholder) {
                 const itemEl = replacePlaceholderItem;
@@ -213,16 +252,22 @@ async function confirmReplace() {
                     '<button class="action-btn btn-replace" data-path="' + escapeAttr(replaceTargetPath) + '" onclick="replaceImageByAttr(this)">替换</button>' +
                     '<button class="action-btn btn-delete" data-path="' + escapeAttr(replaceTargetPath) + '" onclick="deleteImageByAttr(this)">删除</button>' +
                     '</div>';
-                if (itemEl) { itemEl.setAttribute('data-filepath', replaceTargetPath); itemEl.innerHTML = itemHtml; }
-                // Add new "+" placeholder for detail/SKU images
-                addAddPlaceholder(itemEl);
+                if (itemEl) {
+                    itemEl.setAttribute('data-filepath', replaceTargetPath);
+                    itemEl.innerHTML = itemHtml;
+                    addAddPlaceholder(itemEl);
+                    // Refresh SKU table if this is a SKU image
+                    if (replaceTargetPath.indexOf('SKU图') >= 0) {
+                        const grid = itemEl.closest('.image-grid');
+                        const card = itemEl.closest('.product-card');
+                        if (grid && card) skuImageRefreshTable(card, grid);
+                    }
+                }
                 replaceIsPlaceholder = false; replacePlaceholderItem = null; replacePlaceholderName = null;
             } else {
                 const item = btn.closest('.img-item');
-                // Save backup with the ORIGINAL image (not the new one!)
                 if (originalBuffer) {
                     imageBackups.set(replaceTargetPath, { buffer: originalBuffer, type: originalType });
-                    console.log('保存原始备份: buffer大小=', originalBuffer.byteLength);
                 }
                 if (item) {
                     const restoreBtn = item.querySelector('.restore-btn');
@@ -234,12 +279,20 @@ async function confirmReplace() {
                     if (imgEl) {
                         imgEl.src = imgEl.src.split('?')[0] + '?t=' + Date.now();
                     }
+                    // Refresh SKU table if this is a SKU image
+                    if (replaceTargetPath.indexOf('SKU图') >= 0) {
+                        const grid = item.closest('.image-grid');
+                        const card = item.closest('.product-card');
+                        if (grid && card) skuImageRefreshTable(card, grid);
+                    }
                 }
             }
             closeReplaceModal();
         } else { showToast('替换失败: ' + (data.error || data.message), 'error'); }
     } catch (err) { showToast('请求失败: ' + err.message, 'error'); }
-    finally { btn.textContent = '替换'; btn.disabled = false; }
+    finally {
+        if (btn) { try { btn.textContent = '替换'; btn.disabled = false; } catch(e) {} }
+    }
 }
 
 async function openProductDir(dirPath) {
@@ -286,6 +339,7 @@ async function restoreImage(btn, targetPath) {
 
 function replacePlaceholder(btn) {
     const itemEl = btn.closest('.img-item');
+    if (!itemEl) { showToast('无法定位图片占位', 'error'); return; }
     const path = btn.getAttribute('data-path');
     const textEl = itemEl.querySelector('.placeholder-text');
     const placeholderName = textEl ? textEl.textContent : path.split(/[\\/]/).pop();
@@ -426,20 +480,24 @@ async function confirmUpload() {
             }
             const newFileName = uploadTargetPath.split(/[\\/]/).pop();
             const newFileUrl = toFileUrl(uploadTargetPath) + '?t=' + Date.now();
-            const wrapHtml = '<div class="img-wrap">' +
-                '<img draggable="true" src="' + escapeHtml(newFileUrl) + '" onclick="showModal(this.src)" title="' + escapeHtml(newFileName) + '">' +
-                '<div class="img-label">' + escapeHtml(newFileName) + '</div></div>';
-            const actionsHtml = '<div class="img-actions-bar">' +
-                '<button class="action-btn btn-replace" data-path="' + escapeAttr(uploadTargetPath) + '" onclick="replaceImageByAttr(this)">替换</button>' +
-                '<button class="action-btn btn-delete" data-path="' + escapeAttr(uploadTargetPath) + '" onclick="deleteImageByAttr(this)">删除</button></div>';
             const itemEl = uploadPlaceholderEl.closest('.img-item');
             itemEl.setAttribute('data-filepath', uploadTargetPath);
-            const oldBar = itemEl.querySelector('.img-actions-bar'); if (oldBar) oldBar.remove();
-            uploadPlaceholderEl.outerHTML = wrapHtml + actionsHtml;
+            itemEl.innerHTML = '<div class="img-wrap">' +
+                '<img draggable="true" src="' + escapeHtml(newFileUrl) + '" onclick="showModal(this.src)" title="' + escapeHtml(newFileName) + '">' +
+                '<div class="img-label">' + escapeHtml(newFileName) + '</div></div>' +
+                '<div class="img-actions-bar">' +
+                '<button class="action-btn btn-replace" data-path="' + escapeAttr(uploadTargetPath) + '" onclick="replaceImageByAttr(this)">替换</button>' +
+                '<button class="action-btn btn-delete" data-path="' + escapeAttr(uploadTargetPath) + '" onclick="deleteImageByAttr(this)">删除</button></div>';
             // Fill any missing main image slots with placeholders
             fillMissingMainImageSlots(itemEl.closest('.product-card'));
             // Add new "+" placeholder for detail/SKU images
             addAddPlaceholder(itemEl);
+            // Refresh SKU table last (after grid modifications are complete)
+            if (uploadTargetPath.indexOf('SKU图') >= 0) {
+                const grid = itemEl.closest('.image-grid');
+                const card = itemEl.closest('.product-card');
+                if (grid && card) skuImageRefreshTable(card, grid);
+            }
             showToast('已上传', 'success'); closeUploadModal();
         } else { showToast('上传失败: ' + (await resp.json()).error, 'error'); }
     } catch (e) { showToast('请求失败: ' + e.message, 'error'); }
@@ -510,9 +568,12 @@ function addAddPlaceholder(itemEl) {
     // Only for detail and SKU images
     const titleText = title.textContent.trim();
     if (!titleText.startsWith('详情图') && !titleText.startsWith('SKU')) return;
-    // Check if "+" placeholder already exists
-    const existingPlus = grid.querySelector('.img-placeholder .placeholder-icon');
-    if (existingPlus && existingPlus.textContent === '+') return;
+    // Check if the last item is already a "+" placeholder
+    const lastItem = grid.lastElementChild;
+    if (lastItem) {
+        const lastPlus = lastItem.querySelector('.placeholder-icon');
+        if (lastPlus && lastPlus.textContent === '+') return;
+    }
 
     const productDir = section.getAttribute('data-product-dir') || '';
     const isDetail = titleText.startsWith('详情图');
@@ -555,427 +616,197 @@ function addSkuImage(placeholderEl) {
     openUploadModal(placeholderEl, skuDir + '\\' + fileName, fileName);
 }
 
-// Drag-and-drop reorder for detail images
-let dragSrcItem = null;
-let dragIndicator = null;
+// ==================== Batch Select & Delete ====================
 
-function setupImageDrag(card) {
-    card.querySelectorAll('.image-grid').forEach(grid => {
-        const section = grid.closest('.section');
-        if (!section) return;
-        const titleEl = section.querySelector('.section-title');
-        if (!titleEl || (!titleEl.textContent.includes('主图') && !titleEl.textContent.includes('详情图'))) return;
-        grid.querySelectorAll('.img-wrap img').forEach(img => {
-            img.draggable = true;
-            img.addEventListener('dragstart', handleDragStart);
-            img.addEventListener('dragend', handleDragEnd);
+function toggleDetailCheck(wrap, event) {
+    const item = wrap.closest('.img-item');
+    const cb = item.querySelector('.img-checkbox');
+    cb.checked = !cb.checked;
+    onImgCheck(cb);
+}
+
+function toggleBatchCheckAll(masterCheckbox, sectionType) {
+    const section = masterCheckbox.closest('.section');
+    const checks = section.querySelectorAll('.img-checkbox[data-section="' + sectionType + '"]');
+    checks.forEach(cb => {
+        cb.checked = masterCheckbox.checked;
+        const item = cb.closest('.img-item');
+        if (cb.checked) item.classList.add('selected');
+        else item.classList.remove('selected');
+    });
+    updateBatchCount(sectionType);
+}
+
+function onImgCheck(cb) {
+    const item = cb.closest('.img-item');
+    if (cb.checked) item.classList.add('selected');
+    else item.classList.remove('selected');
+
+    // Update "select all" checkbox state
+    const section = cb.closest('.section');
+    const masterCb = section.querySelector('input[type="checkbox"][id^="batchCheckAll"]');
+    if (masterCb) {
+        const allChecks = section.querySelectorAll('.img-checkbox[data-section]');
+        const checkedCount = section.querySelectorAll('.img-checkbox:checked').length;
+        masterCb.checked = allChecks.length === checkedCount && checkedCount > 0;
+    }
+    updateBatchCount(cb.getAttribute('data-section'));
+}
+
+function updateBatchCount(sectionType) {
+    const section = document.querySelector('.detail-section');
+    if (!section) return;
+    const countEl = section.querySelector('.batch-count');
+    const barEl = section.querySelector('.batch-bar');
+    if (!countEl || !barEl) return;
+    const checked = section.querySelectorAll('.img-checkbox:checked').length;
+    countEl.textContent = '已选 ' + checked;
+    if (checked > 0) barEl.classList.add('active');
+    else barEl.classList.remove('active');
+}
+
+async function reloadDetailImages(section) {
+    const productDir = section.getAttribute('data-product-dir') || '';
+    if (!productDir) return;
+
+    const resp = await fetch('/api/files/list-images', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productDir })
+    });
+    if (!resp.ok) return;
+    const data = await resp.json();
+    const images = data.detailImages || [];
+    const paths = images.map(img => img.path);
+
+    let html = '';
+    paths.forEach((path) => {
+        const fileName = path ? path.split(/[\\/]/).pop() : '';
+        html += '<div class="img-item" data-filepath="' + escapeAttr(path) + '">';
+        html += '<input type="checkbox" class="img-checkbox" data-section="detail" onclick="event.stopPropagation()" onchange="onImgCheck(this)" title="选中">';
+        html += '<div class="img-wrap" onclick="toggleDetailCheck(this, event)" ondblclick="showModal(this.querySelector(\'img\').src)">';
+        html += '<img draggable="true" src="' + escapeHtml(path ? toFileUrl(path) : '') + '?t=' + Date.now() + '" title="' + escapeHtml(fileName) + '">';
+        html += '<div class="img-label">' + escapeHtml(fileName) + '</div>';
+        html += '</div>';
+        html += '<div class="img-actions-bar">';
+        html += '<button class="action-btn btn-replace" data-path="' + escapeAttr(path) + '" onclick="replaceImageByAttr(this)">替换</button>';
+        html += '<button class="action-btn restore-btn btn-restore" data-path="' + escapeAttr(path) + '" onclick="restoreImageByAttr(this)">复原</button>';
+        html += '<button class="action-btn btn-delete" data-path="' + escapeAttr(path) + '" onclick="deleteImageByAttr(this)">删除</button>';
+        html += '</div></div>';
+    });
+    html += '<div class="img-item">';
+    html += '<div class="img-placeholder" onclick="addDetailImage(this)">';
+    html += '<div class="placeholder-icon">+</div>';
+    html += '<div class="placeholder-text">添加图</div>';
+    html += '</div></div>';
+
+    const grid = section.querySelector('.image-grid');
+    if (grid) {
+        // 销毁旧的 SortableJS 实例前先从 Map 移除（防止 onEnd 误触发）
+        if (typeof _detailSortableMap !== 'undefined') {
+            const existing = _detailSortableMap.get(grid);
+            if (existing) {
+                _detailSortableMap.delete(grid);
+                existing.destroy();
+            }
+        }
+
+        grid.innerHTML = html;
+
+        // 重新初始化 SortableJS
+        if (typeof setupDetailDrag === 'function') {
+            setupDetailDrag(section.closest('.product-card'));
+        }
+    }
+
+    const badge = section.querySelector('.section-title .badge');
+    if (badge) badge.textContent = paths.length;
+
+    updateBatchCount('detail');
+}
+
+async function batchDeleteSelected(sectionType) {
+    const checked = document.querySelectorAll('.img-checkbox:checked[data-section="' + sectionType + '"]');
+    if (checked.length === 0) { showToast('没有选中图片', 'error'); return; }
+
+    const count = checked.length;
+    showConfirm('确定删除选中的 ' + count + ' 张图片？', 'danger', async function(ok) {
+        if (!ok) return;
+
+        // Collect paths and remove items from DOM
+        const sectionsMap = new Map(); // section -> paths[]
+        checked.forEach(cb => {
+            const item = cb.closest('.img-item');
+            const section = item.closest('.section');
+            const path = item.getAttribute('data-filepath');
+            if (!sectionsMap.has(section)) sectionsMap.set(section, []);
+            if (path && !path.startsWith('http://') && !path.startsWith('https://')) {
+                sectionsMap.get(section).push(path);
+            }
+            item.remove();
         });
-        grid.addEventListener('dragover', handleDragOver);
-        grid.addEventListener('drop', function(e) { handleDrop(e, grid); });
+
+        // Update UI
+        updateBatchCount(sectionType);
+        const section = document.querySelector('.detail-section');
+        const masterCb = section ? section.querySelector('input[type="checkbox"][id^="batchCheckAll"]') : null;
+        if (masterCb) masterCb.checked = false;
+
+        // Delete files and renumber
+        let successCount = 0;
+        let failCount = 0;
+        for (const [section, paths] of sectionsMap) {
+            for (const path of paths) {
+                try {
+                    const resp = await fetch('/api/files/view?path=' + encodeURIComponent(path), { method: 'DELETE' });
+                    if (resp.ok) successCount++;
+                    else failCount++;
+                } catch (e) { failCount++; }
+            }
+            if (sectionType === 'detail') await reloadDetailImages(section);
+        }
+
+        if (failCount === 0) showToast('已删除 ' + successCount + ' 张图片', 'success');
+        else showToast('已删除 ' + successCount + ' 张，失败 ' + failCount + ' 张', 'error');
     });
 }
 
-let dragGhost = null;
-
-function handleDragStart(e) {
-    dragSrcItem = this.closest('.img-item');
-    if (!dragSrcItem) return;
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', '');
-
-    // Hide native browser drag image (use a tiny transparent pixel)
-    const blank = document.createElement('canvas');
-    blank.width = 1; blank.height = 1;
-    e.dataTransfer.setDragImage(blank, 0, 0);
-
-    // Hide source but keep its space in the layout (flex won't reflow)
-    dragSrcItem.style.transition = 'opacity 0.15s ease';
-    dragSrcItem.style.opacity = '0.15';
-
-    // Create a ghost clone - only the image, not the action bar
-    const srcImg = dragSrcItem.querySelector('img');
-    if (srcImg) {
-        dragGhost = srcImg.cloneNode(true);
-        dragGhost.style.position = 'fixed';
-        dragGhost.style.left = '-9999px';
-        dragGhost.style.width = '120px';
-        dragGhost.style.height = '120px';
-        dragGhost.style.objectFit = 'cover';
-        dragGhost.style.zIndex = '9999';
-        dragGhost.style.pointerEvents = 'none';
-        dragGhost.style.opacity = '0.92';
-        dragGhost.style.transform = 'rotate(3deg) scale(1.08)';
-        dragGhost.style.boxShadow = '0 8px 30px rgba(255,106,0,0.4)';
-        dragGhost.style.borderRadius = '10px';
-        dragGhost.style.overflow = 'hidden';
-        document.body.appendChild(dragGhost);
-
-        // Position ghost at mouse
-        dragGhost.style.left = (e.clientX - 60) + 'px';
-        dragGhost.style.top = (e.clientY - 60) + 'px';
-    }
-
-    // Add transition to all other items for smooth slide animation
-    const grid = dragSrcItem.closest('.image-grid');
-    if (grid) {
-        grid.querySelectorAll('.img-item').forEach(item => {
-            if (item !== dragSrcItem) {
-                item.style.transition = 'transform 0.25s ease';
-            }
-        });
-    }
-}
-
-function handleDragEnd() {
-    // Remove ghost
-    if (dragGhost) { dragGhost.remove(); dragGhost = null; }
-    // Restore shifted items
-    if (lastShiftRow) {
-        lastShiftRow.forEach(item => {
-            item.style.transform = '';
-            item.style.transition = '';
-            item.style.opacity = '';
-        });
-        lastShiftRow = null;
-        lastShiftIndex = -1;
-    }
-    // Restore source
-    if (dragSrcItem) {
-        dragSrcItem.style.opacity = '';
-        dragSrcItem.style.transition = '';
-        dragSrcItem.style.pointerEvents = '';
-    }
-    // Remove transitions and transforms from other items
-    const grid = dragSrcItem?.closest('.image-grid');
-    if (grid) {
-        grid.querySelectorAll('.img-item').forEach(item => {
-            item.style.transition = ''; item.style.transform = ''; item.style.opacity = '';
-        });
-    }
-    removeDragIndicator(); dragSrcItem = null;
-}
-
-function handleDragOver(e) {
-    e.preventDefault(); e.dataTransfer.dropEffect = 'move';
-
-    // Move ghost to follow cursor
-    if (dragGhost) {
-        dragGhost.style.left = (e.clientX - 60) + 'px';
-        dragGhost.style.top = (e.clientY - 60) + 'px';
-    }
-
-    const grid = e.currentTarget;
-    const items = Array.from(grid.querySelectorAll('.img-item'));
-    const visibleItems = items.filter(it => it !== dragSrcItem);
-    if (visibleItems.length === 0) return;
-
-    const mouseY = e.clientY;
-    const mouseX = e.clientX;
-
-    // Group items by visual row
-    const rows = [];
-    for (const item of visibleItems) {
-        const rect = item.getBoundingClientRect();
-        const cy = rect.top + rect.height / 2;
-        let placed = false;
-        for (const row of rows) {
-            if (Math.abs(cy - row.y) < rect.height * 0.6) { row.items.push(item); placed = true; break; }
-        }
-        if (!placed) rows.push({ y: cy, items: [item] });
-    }
-
-    // Find the row the mouse is in
-    let targetRow = rows[rows.length - 1];
-    for (const row of rows) {
-        const firstRect = row.items[0].getBoundingClientRect();
-        const lastRect = row.items[row.items.length - 1].getBoundingClientRect();
-        if (mouseY >= firstRect.top && mouseY <= lastRect.bottom) {
-            targetRow = row;
-            break;
-        }
-    }
-
-    // Find insert position within the target row
-    let insertIndex = items.length;
-    for (let i = 0; i < targetRow.items.length; i++) {
-        const item = targetRow.items[i];
-        const rect = item.getBoundingClientRect();
-        const centerX = rect.left + rect.width / 2;
-        if (mouseX < centerX) {
-            insertIndex = items.indexOf(item);
-            break;
-        }
-    }
-
-    // Shift animation: items from insertIndex onwards shift right
-    applyShift(grid, items, insertIndex);
-
-    showDragIndicator(grid, items, insertIndex);
-}
-
-let lastShiftRow = null;
-let lastShiftIndex = -1;
-
-function applyShift(grid, items, insertIndex) {
-    // Skip if same as last applied
-    if (insertIndex === lastShiftIndex && lastShiftRow) return;
-
-    // Restore previous shifted items
-    if (lastShiftRow) {
-        lastShiftRow.forEach(item => {
-            item.style.transition = 'none';
-            item.style.transform = '';
-            item.style.opacity = '';
-        });
-    }
-    lastShiftRow = null;
-    lastShiftIndex = -1;
-
-    if (insertIndex < 0 || insertIndex >= items.length) return;
-
-    // Find which row the insert index is in
-    const visibleItems = items.filter(it => it !== dragSrcItem);
-    const rows = [];
-    for (const item of visibleItems) {
-        const rect = item.getBoundingClientRect();
-        const cy = rect.top + rect.height / 2;
-        let placed = false;
-        for (const row of rows) {
-            if (Math.abs(cy - row.y) < rect.height * 0.6) { row.items.push(item); placed = true; break; }
-        }
-        if (!placed) rows.push({ y: cy, items: [item] });
-    }
-
-    // Find the row and shift items from insertIndex onwards
-    for (const row of rows) {
-        const rowItemIndices = row.items.map(it => items.indexOf(it));
-        const minIdx = Math.min(...rowItemIndices);
-        const maxIdx = Math.max(...rowItemIndices);
-
-        if (insertIndex >= minIdx && insertIndex <= maxIdx + 1) {
-            const shifted = [];
-            for (const rowItem of row.items) {
-                const itemIdx = items.indexOf(rowItem);
-                if (itemIdx >= insertIndex) {
-                    rowItem.style.transition = 'transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
-                    rowItem.style.transform = `translateX(${rowItem.offsetWidth + 12}px)`;
-                    rowItem.style.opacity = '0.7';
-                    shifted.push(rowItem);
-                }
-            }
-            lastShiftRow = shifted;
-            lastShiftIndex = insertIndex;
-            return;
-        }
-    }
-}
-
-function showDragIndicator(grid, items, insertIndex) {
-    removeDragIndicator();
-    const visibleItems = items.filter(it => it !== dragSrcItem);
-    dragIndicator = document.createElement('div');
-    dragIndicator.className = 'drop-indicator';
-    grid.style.position = 'relative';
-    grid.appendChild(dragIndicator);
-    const gridRect = grid.getBoundingClientRect();
-    if (insertIndex >= visibleItems.length) {
-        const last = visibleItems[visibleItems.length - 1];
-        if (last) {
-            const lastRect = last.getBoundingClientRect();
-            dragIndicator.style.left = (lastRect.right - gridRect.left + 10) + 'px';
-            dragIndicator.style.top = (lastRect.top - gridRect.top) + 'px';
-            dragIndicator.style.height = lastRect.height + 'px';
-        }
-    } else {
-        const target = visibleItems[insertIndex];
-        if (target) {
-            const targetRect = target.getBoundingClientRect();
-            dragIndicator.style.left = (targetRect.left - gridRect.left - 4) + 'px';
-            dragIndicator.style.top = (targetRect.top - gridRect.top) + 'px';
-            dragIndicator.style.height = targetRect.height + 'px';
-        }
-    }
-}
-
-function removeDragIndicator() { if (dragIndicator) { dragIndicator.remove(); dragIndicator = null; } }
-
-async function handleDrop(e, grid) {
-    e.preventDefault(); removeDragIndicator();
-    if (!dragSrcItem) return;
-    const items = Array.from(grid.querySelectorAll('.img-item'));
-    const visibleItems = items.filter(it => it !== dragSrcItem);
-
-    const mouseY = e.clientY;
-    const mouseX = e.clientX;
-
-    // Group items by visual row
-    const rows = [];
-    for (const item of visibleItems) {
-        const rect = item.getBoundingClientRect();
-        const cy = rect.top + rect.height / 2;
-        let placed = false;
-        for (const row of rows) {
-            if (Math.abs(cy - row.y) < rect.height * 0.6) { row.items.push(item); placed = true; break; }
-        }
-        if (!placed) rows.push({ y: cy, items: [item] });
-    }
-
-    // Find the row the mouse is in
-    let targetRow = rows[rows.length - 1];
-    for (const row of rows) {
-        const firstRect = row.items[0].getBoundingClientRect();
-        const lastRect = row.items[row.items.length - 1].getBoundingClientRect();
-        if (mouseY >= firstRect.top && mouseY <= lastRect.bottom) {
-            targetRow = row;
-            break;
-        }
-    }
-
-    // Find insert position within the target row
-    let insertIndex = items.length;
-    for (const item of targetRow.items) {
-        if (mouseX < item.getBoundingClientRect().left + item.getBoundingClientRect().width / 2) {
-            insertIndex = items.indexOf(item);
-            break;
-        }
-    }
-    // Restore shifted items before DOM reorder
-    if (lastShiftRow) {
-        lastShiftRow.forEach(item => {
-            item.style.transform = '';
-            item.style.transition = 'none';
-            item.style.opacity = '';
-        });
-        lastShiftRow = null;
-        lastShiftIndex = -1;
-    }
-    dragSrcItem.style.opacity = ''; dragSrcItem.style.transition = ''; dragSrcItem.style.pointerEvents = '';
-    dragSrcItem.remove();
-    const currentItems = grid.querySelectorAll('.img-item');
-    if (insertIndex >= currentItems.length) grid.appendChild(dragSrcItem);
-    else grid.insertBefore(dragSrcItem, currentItems[insertIndex]);
-    dragSrcItem.style.transition = 'transform 0.3s ease, box-shadow 0.3s ease';
-    dragSrcItem.style.boxShadow = '0 0 12px rgba(255,106,0,0.6)';
-    setTimeout(() => { if (dragSrcItem) { dragSrcItem.style.boxShadow = ''; dragSrcItem.style.transition = ''; } }, 300);
-
-    const section = grid.closest('.section');
-    const productDir = section ? section.getAttribute('data-product-dir') : '';
-    const titleText = section?.querySelector('.section-title')?.textContent.trim();
-    const isMain = titleText?.startsWith('主图');
-
-    // 主图：只交换文件路径，不重命名
-    if (isMain) {
-        const allItems = Array.from(grid.querySelectorAll('.img-item'));
-        const srcPath = dragSrcItem.getAttribute('data-filepath');
-        // insertIndex 是基于所有 items 的索引，但 dragSrcItem 已被 remove，需要修正
-        // 实际上在 handleDrop 中 dragSrcItem 已被 remove 再 insert，所以 allItems 不包含 dragSrcItem
-        // 需要重新获取
-        const currentItems = Array.from(grid.querySelectorAll('.img-item'));
-        // 找到 dragSrcItem 在 currentItems 中的位置
-        const dragNewIndex = currentItems.indexOf(dragSrcItem);
-        // 找到 insertIndex 位置的 item
-        let targetItem = currentItems[insertIndex] || null;
-        if (!targetItem || targetItem === dragSrcItem) {
-            showToast('已重排序', 'success');
-            return;
-        }
-        const targetPath = targetItem.getAttribute('data-filepath');
-        if (!srcPath || !targetPath) {
-            showToast('主图路径不完整，无法交换', 'error');
-            return;
-        }
-
-        // 交换两个位置的 data-filepath、图片内容、label
-        dragSrcItem.setAttribute('data-filepath', targetPath);
-        targetItem.setAttribute('data-filepath', srcPath);
-        dragSrcItem.querySelectorAll('.action-btn[data-path]').forEach(btn => btn.setAttribute('data-path', targetPath));
-        targetItem.querySelectorAll('.action-btn[data-path]').forEach(btn => btn.setAttribute('data-path', srcPath));
-
-        // 更新图片和 label
-        const srcImg = dragSrcItem.querySelector('img');
-        const targetImg = targetItem.querySelector('img');
-        const srcLabel = dragSrcItem.querySelector('.img-label');
-        const targetLabel = targetItem.querySelector('.img-label');
-        const srcSrc = srcImg ? srcImg.src : '';
-        const targetSrc = targetImg ? targetImg.src : '';
-        const srcTitle = srcImg ? srcImg.title : '';
-        const targetTitle = targetImg ? targetImg.title : '';
-
-        if (srcImg && targetImg) {
-            // 两个都有图：直接交换
-            srcImg.src = targetSrc; targetImg.src = srcSrc;
-            srcImg.title = targetTitle; targetImg.title = srcTitle;
-            if (srcLabel) srcLabel.textContent = targetTitle;
-            if (targetLabel) targetLabel.textContent = srcTitle;
-        } else if (srcImg && !targetImg) {
-            // src 有图，target 是 placeholder：把 src 的内容给 target，target 的内容给 src
-            const targetPlaceholder = targetItem.querySelector('.img-placeholder');
-            const targetPlaceholderText = targetPlaceholder ? targetPlaceholder.querySelector('.placeholder-text')?.textContent : '';
-            // src 变成 placeholder
-            const srcNum = srcPath.match(/主图_(\d{2})/)?.[1] || '01';
-            replaceWithPlaceholderInner(dragSrcItem, srcPath, srcNum);
-            // target 变成有图
-            const targetWrap = targetItem.querySelector('.img-wrap');
-            if (targetWrap) targetWrap.outerHTML = '<div class="img-wrap"><img draggable="true" src="' + escapeHtml(srcSrc) + '" onclick="showModal(this.src)" title="' + escapeHtml(srcTitle) + '"><div class="img-label">' + escapeHtml(srcTitle) + '</div></div>';
-        } else if (!srcImg && targetImg) {
-            // src 是 placeholder，target 有图
-            const srcPlaceholder = dragSrcItem.querySelector('.img-placeholder');
-            const srcPlaceholderText = srcPlaceholder ? srcPlaceholder.querySelector('.placeholder-text')?.textContent : '';
-            // target 变成 placeholder
-            const targetNum = targetPath.match(/主图_(\d{2})/)?.[1] || '01';
-            replaceWithPlaceholderInner(targetItem, targetPath, targetNum);
-            // src 变成有图
-            const srcWrap = dragSrcItem.querySelector('.img-wrap');
-            if (srcWrap) srcWrap.outerHTML = '<div class="img-wrap"><img draggable="true" src="' + escapeHtml(targetSrc) + '" onclick="showModal(this.src)" title="' + escapeHtml(targetTitle) + '"><div class="img-label">' + escapeHtml(targetTitle) + '</div></div>';
-        }
-        // 两个都是 placeholder：只需交换 data-filepath（上面已做）
-        showToast('已重排序', 'success');
-        return;
-    }
-
-    // 详情图/SKU图：原有逻辑
+async function renumberDetailImages(section) {
+    const prefix = '详情图';
+    const productDir = section.getAttribute('data-product-dir') || '';
     if (!productDir) return;
+
+    const items = section.querySelectorAll('.img-item[data-filepath]');
+    items.forEach((item, idx) => {
+        const num = String(idx + 1).padStart(2, '0');
+        const fileName = prefix + '_' + num + '.jpg';
+        const newPath = productDir + '\\' + prefix + '\\' + fileName;
+        item.setAttribute('data-filepath', newPath);
+        const cb = item.querySelector('.img-checkbox');
+        if (cb) { cb.checked = false; item.classList.remove('selected'); }
+        item.querySelectorAll('.action-btn[data-path]').forEach(btn => btn.setAttribute('data-path', newPath));
+        const labelEl = item.querySelector('.img-label');
+        if (labelEl) labelEl.textContent = fileName;
+        const imgEl = item.querySelector('img');
+        if (imgEl) { imgEl.title = fileName; imgEl.src = toFileUrl(newPath) + '?t=' + Date.now(); }
+    });
+
+    // Reorder on disk
     const orderedPaths = [];
-    grid.querySelectorAll('.img-item[data-filepath]').forEach(item => { const fp = item.getAttribute('data-filepath'); if (fp) orderedPaths.push(fp); });
-    try {
-        await fetch('/api/files/reorder-detail-images', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ productDir, orderedPaths })
-        });
-        // Update DOM to reflect new filenames
-        const isDetail = grid.closest('.section')?.querySelector('.section-title')?.textContent.trim().startsWith('详情图');
-        const prefix = isDetail ? '详情图' : 'SKU图';
-        const subDir = isDetail ? '详情图' : 'SKU图';
-        let idx = 0;
-        grid.querySelectorAll('.img-item[data-filepath]').forEach(item => {
-            const oldPath = item.getAttribute('data-filepath');
-            const oldName = oldPath.split(/[\\/]/).pop();
-            let ext = '';
-            const dotIdx = oldName.lastIndexOf('.');
-            if (dotIdx >= 0) ext = oldName.substring(dotIdx);
-            const num = String(idx + 1).padStart(2, '0');
-            const newName = prefix + '_' + num + ext;
-            const newPath = productDir + '\\' + subDir + '\\' + newName;
+    items.forEach(item => orderedPaths.push(item.getAttribute('data-filepath')));
+    if (orderedPaths.length > 0) {
+        try {
+            await fetch('/api/files/reorder-detail-images', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ productDir, orderedPaths })
+            });
+        } catch (e) { /* ignore */ }
+    }
 
-            item.setAttribute('data-filepath', newPath);
-            // Update button data-path attributes
-            item.querySelectorAll('.action-btn[data-path]').forEach(btn => btn.setAttribute('data-path', newPath));
-            // Update label and title
-            const labelEl = item.querySelector('.img-label');
-            if (labelEl) labelEl.textContent = newName;
-            const imgEl = item.querySelector('img');
-            if (imgEl) {
-                imgEl.title = newName;
-                // Update src with cache-busting
-                imgEl.src = toFileUrl(newPath) + '?t=' + Date.now();
-            }
-            idx++;
-        });
-        showToast('已重排序', 'success');
-    } catch (err) { console.error('Failed to reorder images:', err); showToast('排序同步失败，请刷新', 'error'); }
+    const badge = section.querySelector('.section-title .badge');
+    if (badge) badge.textContent = items.length;
 }
-
-// Clipboard paste
 window.addEventListener('paste', function(e) {
     const modal = document.getElementById('uploadModal');
     if (!modal.classList.contains('active')) return;
@@ -992,3 +823,427 @@ window.addEventListener('paste', function(e) {
         }
     }
 });
+
+// ==================== Video Upload / Replace / Delete / Restore ====================
+
+let videoUploadTargetPath = null;
+let videoUploadPlaceholderEl = null;
+let videoSelectedFileBlob = null;
+const videoBackups = new Map();
+
+function openVideoUploadModal(placeholderEl, targetPath) {
+    videoUploadPlaceholderEl = placeholderEl;
+    videoUploadTargetPath = targetPath;
+    videoSelectedFileBlob = null;
+    document.getElementById('videoUploadModalTitle').textContent = '上传视频';
+    document.getElementById('videoFileInput').value = '';
+    document.getElementById('videoUrlInput').value = '';
+    document.getElementById('videoUploadConfirmBtn').disabled = false;
+    document.getElementById('videoUploadModal').classList.add('active');
+}
+
+function closeVideoUploadModal() {
+    document.getElementById('videoUploadModal').classList.remove('active');
+    videoUploadPlaceholderEl = null;
+    videoUploadTargetPath = null;
+    videoSelectedFileBlob = null;
+}
+
+function onVideoFileSelected(input) {
+    const file = input.files[0];
+    if (!file) { videoSelectedFileBlob = null; return; }
+    videoSelectedFileBlob = file;
+}
+
+async function confirmVideoUpload() {
+    if (!videoUploadTargetPath) return;
+    let fileBlob = videoSelectedFileBlob;
+
+    // If no file, try URL
+    if (!fileBlob) {
+        const url = document.getElementById('videoUrlInput').value.trim();
+        if (!url) { showToast('请选择视频文件或填写视频URL', 'error'); return; }
+        try {
+            showToast('正在下载视频...');
+            const resp = await fetch(url);
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            fileBlob = await resp.blob();
+        } catch (e) { showToast('视频URL无效: ' + e.message, 'error'); return; }
+    }
+
+    // Validate it's a video
+    if (!fileBlob.type.startsWith('video/')) {
+        showToast('请选择视频文件（mp4/webm）', 'error');
+        return;
+    }
+
+    const btn = document.getElementById('videoUploadConfirmBtn');
+    btn.textContent = '上传中...'; btn.disabled = true;
+    try {
+        const formData = new FormData();
+        formData.append('targetPath', videoUploadTargetPath);
+        formData.append('file', fileBlob, 'video.mp4');
+        const resp = await fetch('/api/files/create-video', { method: 'POST', body: formData });
+        if (resp.ok) {
+            // Save backup
+            if (!videoBackups.has(videoUploadTargetPath)) {
+                const uploadBuffer = await fileBlob.arrayBuffer();
+                videoBackups.set(videoUploadTargetPath, { buffer: uploadBuffer, type: fileBlob.type || 'video/mp4' });
+            }
+            // Find the video-item from the current DOM
+            const itemEl = findVideoItemByPath(videoUploadTargetPath);
+            const newFileName = videoUploadTargetPath.split(/[\\/]/).pop();
+            const newFileUrl = toFileUrl(videoUploadTargetPath) + '?t=' + Date.now();
+
+            const videoHtml = '<div class="video-wrap">' +
+                '<video style="max-width:100%;max-height:300px;border-radius:8px;" controls preload="metadata"><source src="' + escapeHtml(newFileUrl) + '" type="video/mp4"></video>' +
+                '<div class="video-label">' + escapeHtml(newFileName) + '</div></div>' +
+                '<div class="video-actions-bar">' +
+                '<button class="action-btn btn-replace" data-path="' + escapeAttr(videoUploadTargetPath) + '" onclick="replaceVideo(this)">替换</button>' +
+                '<button class="action-btn restore-btn btn-restore" data-path="' + escapeAttr(videoUploadTargetPath) + '" onclick="restoreVideo(this)" style="display:none">复原</button>' +
+                '<button class="action-btn btn-delete" data-path="' + escapeAttr(videoUploadTargetPath) + '" onclick="deleteVideo(this)">删除</button>';
+
+            if (itemEl) {
+                itemEl.setAttribute('data-filepath', videoUploadTargetPath);
+                itemEl.innerHTML = videoHtml;
+            }
+            showToast('视频已上传', 'success');
+            closeVideoUploadModal();
+        } else {
+            const data = await resp.json().catch(() => ({ error: '上传失败' }));
+            showToast('上传失败: ' + (data.error || data.message), 'error');
+        }
+    } catch (e) { showToast('请求失败: ' + e.message, 'error'); }
+    finally { btn.textContent = '确认上传'; btn.disabled = false; }
+}
+
+function findVideoItemByPath(targetPath) {
+    // Search all .video-item elements for matching data-filepath
+    const items = document.querySelectorAll('.video-item[data-filepath]');
+    for (const item of items) {
+        if (item.getAttribute('data-filepath') === targetPath) return item;
+    }
+    // Fallback: find by the modal's closest context
+    if (videoUploadPlaceholderEl) {
+        return videoUploadPlaceholderEl.closest('.video-item');
+    }
+    return null;
+}
+
+function replaceVideo(btn) {
+    const path = btn.getAttribute('data-path');
+    videoUploadTargetPath = path;
+    // Find the video-item and open modal
+    const itemEl = btn.closest('.video-item');
+    if (!itemEl) { showToast('无法定位视频', 'error'); return; }
+    videoUploadPlaceholderEl = itemEl.querySelector('.video-wrap') || itemEl;
+    document.getElementById('videoUploadModalTitle').textContent = '替换视频';
+    document.getElementById('videoFileInput').value = '';
+    document.getElementById('videoUrlInput').value = '';
+    document.getElementById('videoUploadConfirmBtn').disabled = false;
+    document.getElementById('videoUploadModal').classList.add('active');
+}
+
+function replaceVideoPlaceholder(btn) {
+    const itemEl = btn.closest('.video-item');
+    videoUploadPlaceholderEl = itemEl.querySelector('.video-placeholder') || itemEl;
+    replaceVideo(btn);
+}
+
+async function deleteVideo(btn) {
+    const path = btn.getAttribute('data-path');
+    if (!path || path.startsWith('http://') || path.startsWith('https://')) {
+        // Just remove the video element, show placeholder
+        const itemEl = btn.closest('.video-item');
+        const section = itemEl.closest('.section');
+        const productDir = section ? section.getAttribute('data-product-dir') || '' : '';
+        const placeholderPath = productDir + '\\视频\\视频.mp4';
+        const placeholderHtml = '<div class="video-placeholder" onclick="openVideoUploadModal(this, \'' + escapeJs(placeholderPath) + '\')">' +
+            '<div class="placeholder-icon">+</div>' +
+            '<div class="placeholder-text">添加视频</div></div>' +
+            '<div class="video-actions-bar">' +
+            '<button class="action-btn btn-replace" data-path="' + escapeAttr(placeholderPath) + '" onclick="replaceVideoPlaceholder(this)">替换</button>' +
+            '<button class="action-btn btn-delete" data-path="' + escapeAttr(placeholderPath) + '" onclick="deleteVideo(this)">删除</button></div>';
+        itemEl.setAttribute('data-filepath', placeholderPath);
+        itemEl.innerHTML = placeholderHtml;
+        return;
+    }
+    showConfirm('确定删除这个视频？', 'danger', function(ok) {
+        if (!ok) return;
+        (async function() {
+            try {
+                const resp = await fetch('/api/files/view?path=' + encodeURIComponent(path), { method: 'DELETE' });
+                const contentType = resp.headers.get('content-type');
+                let data;
+                if (contentType && contentType.includes('application/json')) data = await resp.json();
+                else { const text = await resp.text(); data = resp.ok ? { message: text } : { error: text }; }
+                if (resp.ok) {
+                    const itemEl = btn.closest('.video-item');
+                    const section = itemEl.closest('.section');
+                    const productDir = section ? section.getAttribute('data-product-dir') || '' : '';
+                    const placeholderPath = productDir + '\\视频\\视频.mp4';
+                    const placeholderHtml = '<div class="video-placeholder" onclick="openVideoUploadModal(this, \'' + escapeJs(placeholderPath) + '\')">' +
+                        '<div class="placeholder-icon">+</div>' +
+                        '<div class="placeholder-text">添加视频</div></div>' +
+                        '<div class="video-actions-bar">' +
+                        '<button class="action-btn btn-replace" data-path="' + escapeAttr(placeholderPath) + '" onclick="replaceVideoPlaceholder(this)">替换</button>' +
+                        '<button class="action-btn btn-delete" data-path="' + escapeAttr(placeholderPath) + '" onclick="deleteVideo(this)">删除</button></div>';
+                    itemEl.setAttribute('data-filepath', placeholderPath);
+                    itemEl.innerHTML = placeholderHtml;
+                    showToast('视频已删除', 'success');
+                } else {
+                    showToast('删除失败: ' + (data.error || data.message), 'error');
+                }
+            } catch (e) { showToast('请求失败: ' + e.message, 'error'); }
+        })();
+    });
+}
+
+async function restoreVideo(btn) {
+    const path = btn.getAttribute('data-path');
+    const backupEntry = videoBackups.get(path);
+    if (!backupEntry) { showToast('没有原始视频备份', 'error'); return; }
+    const { buffer, type } = backupEntry;
+    btn.textContent = '...'; btn.disabled = true;
+    try {
+        const file = new File([buffer], 'video.mp4', { type: type });
+        const formData = new FormData();
+        formData.append('targetPath', path);
+        formData.append('file', file, 'video.mp4');
+        const resp = await fetch('/api/files/replace-video', { method: 'POST', body: formData });
+        const data = await resp.json();
+        if (resp.ok) {
+            videoBackups.delete(path);
+            btn.classList.remove('visible');
+            const itemEl = btn.closest('.video-item');
+            if (itemEl) {
+                const videoEl = itemEl.querySelector('video source');
+                if (videoEl) {
+                    videoEl.src = videoEl.src.split('?')[0] + '?t=' + Date.now();
+                    // Reload the video element
+                    const video = itemEl.querySelector('video');
+                    if (video) video.load();
+                }
+            }
+            showToast('视频已复原', 'success');
+        } else {
+            showToast('复原失败: ' + (data.error || data.message), 'error');
+        }
+    } catch (err) { showToast('请求失败: ' + err.message, 'error'); }
+    finally { btn.textContent = '复原'; btn.disabled = false; }
+}
+
+// ==================== SKU Row Drag Reorder ====================
+
+let skuDragSrcRow = null;
+let skuLongPressTimer = null;
+let skuLongPressFired = false;
+
+function setupSkuDrag(card) {
+    const tables = card.querySelectorAll('.sku-table-draggable tbody');
+    tables.forEach(tbody => {
+        const rows = tbody.querySelectorAll('.sku-row');
+        rows.forEach(row => {
+            row.addEventListener('mousedown', skuMouseDown);
+            row.addEventListener('dragstart', skuDragStart);
+            row.addEventListener('dragend', skuDragEnd);
+            row.addEventListener('dragover', skuDragOver);
+            row.addEventListener('dragleave', skuDragLeave);
+            row.addEventListener('drop', skuDrop);
+            // Touch support
+            row.addEventListener('touchstart', skuTouchStart, { passive: false });
+            row.addEventListener('touchmove', skuTouchMove, { passive: false });
+            row.addEventListener('touchend', skuTouchEnd, { passive: false });
+        });
+    });
+}
+
+function skuMouseDown(e) {
+    const row = this;
+    skuLongPressFired = false;
+    skuLongPressTimer = setTimeout(() => {
+        skuLongPressFired = true;
+        row.setAttribute('draggable', 'true');
+        row.style.cursor = 'grabbing';
+    }, 500);
+}
+
+function skuTouchStart(e) {
+    const row = this;
+    skuDragSrcRow = row;
+    skuLongPressFired = false;
+    skuLongPressTimer = setTimeout(() => {
+        skuLongPressFired = true;
+        row.style.opacity = '0.4';
+        row.style.cursor = 'grabbing';
+    }, 500);
+}
+
+function skuTouchMove(e) {
+    if (!skuLongPressFired) { clearTimeout(skuLongPressTimer); return; }
+    e.preventDefault();
+    const touch = e.touches[0];
+    const target = document.elementFromPoint(touch.clientX, touch.clientY);
+    const targetRow = target ? target.closest('.sku-row') : null;
+    clearSkuDropIndicators();
+    if (targetRow && targetRow !== skuDragSrcRow) {
+        const rect = targetRow.getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
+        if (touch.clientY < midY) {
+            targetRow.classList.add('sku-drop-above');
+        } else {
+            targetRow.classList.add('sku-drop-below');
+        }
+    }
+}
+
+function skuTouchEnd(e) {
+    clearTimeout(skuLongPressTimer);
+    if (!skuLongPressFired || !skuDragSrcRow) {
+        skuDragSrcRow = null;
+        clearSkuDropIndicators();
+        return;
+    }
+    e.preventDefault();
+    const touch = e.changedTouches[0];
+    const target = document.elementFromPoint(touch.clientX, touch.clientY);
+    const targetRow = target ? target.closest('.sku-row') : null;
+
+    if (targetRow && targetRow !== skuDragSrcRow) {
+        const tbody = skuDragSrcRow.closest('tbody');
+        const allRows = Array.from(tbody.querySelectorAll('.sku-row'));
+        const srcIdx = allRows.indexOf(skuDragSrcRow);
+        const tgtIdx = allRows.indexOf(targetRow);
+
+        const rect = targetRow.getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
+        const insertIdx = touch.clientY < midY ? tgtIdx : tgtIdx + 1;
+
+        skuDragSrcRow.remove();
+        const currentRows = tbody.querySelectorAll('.sku-row');
+        if (insertIdx >= currentRows.length) {
+            tbody.appendChild(skuDragSrcRow);
+        } else {
+            tbody.insertBefore(skuDragSrcRow, currentRows[insertIdx]);
+        }
+
+        skuDragSrcRow.style.opacity = '';
+        skuDragSrcRow.style.cursor = '';
+        clearSkuDropIndicators();
+        submitSkuReorder(tbody);
+    } else {
+        if (skuDragSrcRow) {
+            skuDragSrcRow.style.opacity = '';
+            skuDragSrcRow.style.cursor = '';
+        }
+        clearSkuDropIndicators();
+    }
+    skuDragSrcRow = null;
+    skuLongPressFired = false;
+}
+
+function skuDragStart(e) {
+    if (!skuLongPressFired) { e.preventDefault(); return; }
+    skuDragSrcRow = this;
+    this.classList.add('sku-dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', '');
+    const blank = document.createElement('canvas');
+    blank.width = 1; blank.height = 1;
+    e.dataTransfer.setDragImage(blank, 0, 0);
+}
+
+function skuDragEnd() {
+    if (skuDragSrcRow) skuDragSrcRow.classList.remove('sku-dragging');
+    clearSkuDropIndicators();
+    skuDragSrcRow = null;
+}
+
+function skuDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (this === skuDragSrcRow) return;
+    clearSkuDropIndicators();
+    const rect = this.getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+    if (e.clientY < midY) {
+        this.classList.add('sku-drop-above');
+    } else {
+        this.classList.add('sku-drop-below');
+    }
+}
+
+function skuDragLeave(e) {
+    this.classList.remove('sku-drop-above', 'sku-drop-below');
+}
+
+function skuDrop(e) {
+    e.preventDefault();
+    if (this === skuDragSrcRow) return;
+    clearSkuDropIndicators();
+
+    const tbody = skuDragSrcRow.closest('tbody');
+    const allRows = Array.from(tbody.querySelectorAll('.sku-row'));
+    const srcIdx = allRows.indexOf(skuDragSrcRow);
+    const tgtIdx = allRows.indexOf(this);
+
+    const rect = this.getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+    const insertIdx = e.clientY < midY ? tgtIdx : tgtIdx + 1;
+
+    skuDragSrcRow.classList.remove('sku-dragging');
+    skuDragSrcRow.remove();
+
+    const currentRows = tbody.querySelectorAll('.sku-row');
+    if (insertIdx >= currentRows.length) {
+        tbody.appendChild(skuDragSrcRow);
+    } else {
+        tbody.insertBefore(skuDragSrcRow, currentRows[insertIdx]);
+    }
+
+    skuDragSrcRow = null;
+    submitSkuReorder(tbody);
+}
+
+function clearSkuDropIndicators() {
+    document.querySelectorAll('.sku-drop-above, .sku-drop-below').forEach(el => {
+        el.classList.remove('sku-drop-above', 'sku-drop-below');
+    });
+}
+
+async function submitSkuReorder(tbody) {
+    const table = tbody.closest('.sku-table');
+    const section = table.closest('.section');
+    const card = section.closest('.product-card');
+    const titleEl = card ? card.querySelector('.product-title[data-product-dir]') : null;
+    let productDir = titleEl ? titleEl.getAttribute('data-product-dir') || '' : '';
+    if (!productDir) return;
+
+    const rows = tbody.querySelectorAll('.sku-row');
+    const orderedSkuIds = [];
+    rows.forEach(row => {
+        orderedSkuIds.push(row.getAttribute('data-sku-id'));
+    });
+
+    try {
+        const resp = await fetch('/api/files/reorder-skus', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ productDir, orderedSkuIds })
+        });
+        const respData = await resp.json();
+        if (!resp.ok || respData.error) {
+            showToast('SKU重排失败: ' + (respData.error || ''), 'error');
+            return;
+        }
+        showToast('SKU顺序已更新', 'success');
+
+        rows.forEach((row) => {
+            row.style.transition = 'transform 0.3s ease';
+            row.style.boxShadow = '0 0 8px rgba(255,106,0,0.4)';
+            setTimeout(() => { row.style.boxShadow = ''; row.style.transition = ''; }, 400);
+        });
+    } catch (e) {
+        showToast('SKU重排请求失败: ' + e.message, 'error');
+    }
+}

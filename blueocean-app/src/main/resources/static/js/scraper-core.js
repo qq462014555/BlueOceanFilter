@@ -82,3 +82,29 @@ function startPolling() {
 
 // 页面加载时加载今天的数据
 window.addEventListener('DOMContentLoaded', loadTodayProducts);
+
+// 页面加载后根据 URL 参数滚动到对应商品
+window.addEventListener('DOMContentLoaded', function() {
+    setTimeout(function() {
+        var params = new URLSearchParams(window.location.search);
+        var p = params.get('p');
+        if (p) {
+            // Find card by data-product-dir
+            var cards = document.querySelectorAll('.product-card[data-product-dir]');
+            for (var i = 0; i < cards.length; i++) {
+                var dir = cards[i].getAttribute('data-product-dir');
+                if (dir && dir.split(/[\\/]/).pop() === decodeURIComponent(p)) {
+                    cards[i].scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    // Highlight matching sidebar item
+                    var links = document.querySelectorAll('.sidebar-item');
+                    for (var j = 0; j < links.length; j++) {
+                        if (links[j].getAttribute('href') === window.location.pathname + '?p=' + encodeURIComponent(p)) {
+                            links[j].classList.add('active');
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+    }, 500);
+});

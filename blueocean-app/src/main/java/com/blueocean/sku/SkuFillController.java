@@ -1,5 +1,7 @@
 package com.blueocean.sku;
 
+import io.micrometer.common.util.StringUtils;
+import org.apache.commons.compress.utils.Lists;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -44,9 +46,37 @@ public class SkuFillController {
         List<String> pageLevels = (List<String>) request.getOrDefault("pageLevels", new ArrayList<>());
         boolean forceRefetch = Boolean.TRUE.equals(request.get("forceRefetch"));
 
-        log.info("SKU 自动填充: title={}, pageLevels={}, forceRefetch={}", title, pageLevels, forceRefetch);
+        log.info("SKU 自动填充: title={}, pageLevels={}, forceRefetch={}", title, forceRefetch);
 
-        Map<String, Object> result = skuFillService.generateSkuAiResult(title, pageLevels, forceRefetch);
+        Map<String, Object> result = skuFillService.generateSkuAiResult(title, forceRefetch);
+
+        // 成功后，自动填写 SKU、价格库存、SKU 图片到千牛页面
+        if (Boolean.TRUE.equals(result.get("success"))) {
+            String productDir = (String) result.get("productDir");
+            if (productDir != null) {
+                try {
+                    Map<String, Object> fillResult = skuFillService.fillSkuToPage(productDir, (List<String>) result.get("qianniuSkuProps"));
+                    if (Boolean.TRUE.equals(fillResult.get("success"))) {
+                        // 2. 填写价格和库存
+                        Map<String, Object> priceResult = skuFillService.fillPriceAndStock(productDir);
+                        if (Boolean.TRUE.equals(priceResult.get("success"))) {
+                            // 3. 上传 SKU 图片
+                            Map<String, Object> imageResult = skuFillService.fillSkuImage(productDir);
+                            if (!Boolean.TRUE.equals(imageResult.get("success"))) {
+                                log.warn("SKU 图片上传失败: {}", imageResult.get("error"));
+                            }
+                        } else {
+                            log.warn("价格和库存填写失败: {}", priceResult.get("error"));
+                        }
+                    } else {
+                        log.warn("SKU 属性填写失败: {}", fillResult.get("error"));
+                    }
+                } catch (Exception e) {
+                    log.warn("自动填写流程异常: {}", e.getMessage());
+                }
+            }
+        }
+
         return ResponseEntity.ok(result);
     }
 
@@ -59,7 +89,26 @@ public class SkuFillController {
 
         log.info("SKU 填写到页面: productDir={}", productDir);
 
-        Map<String, Object> result = skuFillService.fillSkuToPage(productDir);
+        Map<String, Object> result = skuFillService.fillSkuToPage(productDir,null);
+
+        // SKU 填写成功后，自动填写价格和库存
+        if (Boolean.TRUE.equals(result.get("success"))) {
+            try {
+                Map<String, Object> priceResult = skuFillService.fillPriceAndStock(productDir);
+                if (Boolean.TRUE.equals(priceResult.get("success"))) {
+                    // 价格和库存填写成功后，自动上传 SKU 图片
+                    Map<String, Object> imageResult = skuFillService.fillSkuImage(productDir);
+                    if (!Boolean.TRUE.equals(imageResult.get("success"))) {
+                        log.warn("SKU 图片上传失败: {}", imageResult.get("error"));
+                    }
+                } else {
+                    log.warn("价格和库存填写失败: {}", priceResult.get("error"));
+                }
+            } catch (Exception e) {
+                log.warn("价格和库存/SKU 图片填写异常: {}", e.getMessage());
+            }
+        }
+
         return ResponseEntity.ok(result);
     }
 

@@ -7,6 +7,8 @@ G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\scraper\ScraperConf
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\scraper\LinkFileReader.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\controller\FileManagerController.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\scraper\LinkEntry.java
+G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\service\ImageFileService.java
+G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\service\SkuImageService.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\entity\KeywordHistory.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\service\DashScopeClient.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\service\ExcelReader.java
@@ -14,8 +16,10 @@ G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\TestRunner.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\taobao\InspectSxkc.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\config\MailConfig.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\scraper\QianniuAttributeScraper.java
+G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\service\MainImageService.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\sku\extractor\CreateSpecAttrExtractor.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\service\ChromePortMonitor.java
+G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\service\DetailImageService.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\scraper\SkuData.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\BlueOceanApplication.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\sku\extractor\PresetAttrExtractor.java
@@ -31,6 +35,7 @@ G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\config\ChromeDebugC
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\scraper\ExcelReporter.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\config\WebConfig.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\controller\FilterController.java
+G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\service\VideoService.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\config\AsyncConfig.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\entity\FilterTask.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\sku\extractor\SkuAttrExtractorFactory.java

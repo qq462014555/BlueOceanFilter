@@ -381,7 +381,7 @@
             btn.disabled = true;
             btn.innerHTML = '<span class="spinner"></span>通知 Claude 填写中...';
             showStatus('info', '正在发送信号，Claude 将自动读取 AI 填充结果并填写到千牛页面...');
-
+s
             try {
                 const resp = await fetch(API_BASE + '/fill-fields', {
                     method: 'POST',

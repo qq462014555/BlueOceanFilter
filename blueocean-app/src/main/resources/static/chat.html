@@ -68,9 +68,12 @@
             <label>模型：</label>
             <select id="modelSelect">
                 <option value="qwen3.6-plus">qwen3.6-plus</option>
+                <option value="qwen3.6-flash">qwen3.6-flash</option>
                 <option value="qwen3-max">qwen3-max</option>
                 <option value="qwen-plus">qwen-plus</option>
                 <option value="qwen-turbo">qwen-turbo</option>
+                <option value="deepseek-v4-pro">deepseek-v4-pro</option>
+                <option value="deepseek-v4-flash">deepseek-v4-flash</option>
             </select>
             <span class="model-badge" id="modelBadge">qwen3.6-plus</span>
             <label style="display:flex;align-items:center;gap:4px;margin-left:auto;cursor:pointer;font-size:13px;color:#666;">
@@ -86,6 +89,7 @@
                     <option value="">-- 选择模板 --</option>
                     <option value="chat">通用聊天</option>
                     <option value="filter">蓝海词筛选</option>
+                    <option value="title">电商标题生成</option>
                 </select>
             </div>
             <textarea id="systemPrompt" placeholder="选择模板或手动输入..."></textarea>
@@ -116,6 +120,23 @@
     let loading = false;
     let chatAbortController = null;
     let PROMPT_TEMPLATES = {};
+
+    PROMPT_TEMPLATES.title = `你是一位资深电商标题优化师，擅长为商品创作高搜索曝光、高点击率的标题。
+
+【核心约束】
+1. 起始词：所有标题必须以用户指定的核心关键词开头
+2. 字数限制：每条标题严格为30个汉字，不得多或少
+3. 生成数量：一次性生成10条标题
+4. 差异化：各条标题的卖点、造型、使用场景必须错开，杜绝内容雷同
+
+【创作方向】
+围绕产品适配人群、玩法用途、材质款式、使用场景重组语序句式，贴合电商用户搜索习惯，突出商品核心优势。仅使用原文已有的字词进行组合创作，禁止凭空杜撰陌生文字、新词或自创描述。
+
+【合规要求】
+语句通顺流畅，删除冗余堆砌词汇，全程规避违规敏感字词。兼顾标题规整度、搜索曝光度与商品营销吸引力。
+
+【输出格式】
+直接输出10条标题，每行一条，不要编号，不要解释。`;
 
     // Load prompt templates from API
     async function loadPromptTemplatesFromApi() {

@@ -68,7 +68,9 @@
       "Bash(mvnw.cmd compile *)",
       "Bash(java *)",
       "Bash(unzip -l \"G:/BlueOceanFilter/.mvn/wrapper/maven-wrapper.jar\")",
-      "Bash(git checkout *)"
+      "Bash(git checkout *)",
+      "Bash(python3 *)",
+      "WebFetch(domain:cdn.jsdelivr.net)"
     ]
   }
 }

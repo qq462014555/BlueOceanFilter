@@ -163,7 +163,7 @@ public class SkuFillService {
      * 主入口：连千牛获取SKU属性名 →  ai补充sku 并且生成sku-ai——reuslt文件
      * @param forceRefetch 是否强制重新调用 AI
      */
-    public Map<String, Object> generateSkuAiResult(String qianniuTitle, List<String> pageLevels, boolean forceRefetch) {
+    public Map<String, Object> generateSkuAiResult(String qianniuTitle, boolean forceRefetch) {
         Map<String, Object> result = new LinkedHashMap<>();
         try {
             // 1. 连接千牛页面，获取 SKU 属性名称 + 判断策略
@@ -203,7 +203,7 @@ public class SkuFillService {
                 aiResult = JSON.parseObject(existingJson);
                 log.info("读取已有 AI 结果文件: {}", jsonPath);
             } else {
-                String aiJson = callAi(productDir, skuData, qianniuSkuProps, pageLevels);
+                String aiJson = callAi(skuData, qianniuSkuProps);
                 aiResult = parseAiResponse(aiJson);
                 String savedPath = saveAiResult(productDir, aiResult);
                 log.info("AI 结果已保存: {}", savedPath);
@@ -233,7 +233,7 @@ public class SkuFillService {
     /**
      * 填写 SKU 选项值到千牛页面
      */
-    public Map<String, Object> fillSkuToPage(String productDir) {
+    public Map<String, Object> fillSkuToPage(String productDir,List<String> qianniuSkuProps ) {
         Map<String, Object> result = new LinkedHashMap<>();
         try {
             // 1. 读取sku-ai-result.json的sku信息
@@ -266,7 +266,7 @@ public class SkuFillService {
                 }
                 page.bringToFront();
 
-                // 进入首页 - 判断要用哪一个模式，如果为 null 重试多次
+                // 判断要用哪一个模式
                 SkuAttrExtractor extractor =  SkuAttrExtractorFactory.findMatching(page);
 
                 if (extractor == null) {
@@ -304,7 +304,7 @@ public class SkuFillService {
                     CreateSpecAttrExtractor createSpecExtractor = (CreateSpecAttrExtractor) extractor;
 
                     String jsonPathStr = jsonPath.toAbsolutePath().toString();
-                    createSpecExtractor.fillSku(page, jsonPathStr);
+                    createSpecExtractor.fillSku(page, jsonPathStr,qianniuSkuProps);
                     log.info("SKU 填写完成(创建规格模式)");
                 } else {
                     result.put("success", false);
@@ -535,10 +535,10 @@ public class SkuFillService {
     }
 
     /**
-     * 调用 AI
+     * 当前页面调用 AI
      */
-    private String callAi(String productDir, List<Map<String, Object>> skuData,
-                          List<String> qianniuSkuProps, List<String> pageLevels) throws Exception {
+    private String callAi(List<Map<String, Object>> skuData,
+                          List<String> qianniuSkuProps) throws Exception {
 
         StringBuilder prompt = new StringBuilder();
         prompt.append("你是电商商品运营专家，负责完善商品 SKU 规格信息。\n\n");
