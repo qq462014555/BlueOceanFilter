@@ -231,31 +231,6 @@ public class CreateSpecAttrExtractor implements SkuAttrExtractor {
         }
     }
 
-    /**
-     * 点击"+ 创建规格"按钮
-     */
-    private void clickCreateSpecBtn(Page page) {
-        Object btnCoords = page.evaluate("""
-                () => {
-                  const xpath = "//*[contains(text(),'创建规格')]";
-                  const btn = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
-                  if (!btn) return null;
-                  btn.scrollIntoView({ block: 'center' });
-                  const rect = btn.getBoundingClientRect();
-                  return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-                }
-                """);
-        if (btnCoords == null) return;
-        @SuppressWarnings("unchecked")
-        Map<String, Object> coords = (Map<String, Object>) btnCoords;
-        double x = ((Number) coords.get("x")).doubleValue();
-        double y = ((Number) coords.get("y")).doubleValue();
-        page.waitForTimeout(500);
-        page.mouse().move(x, y);
-        page.waitForTimeout(200);
-        page.mouse().click(x, y);
-        page.waitForTimeout(1500);
-    }
 
     /**
      * 选择"单层展示·自定义填写规格"单选
@@ -361,29 +336,6 @@ public class CreateSpecAttrExtractor implements SkuAttrExtractor {
         }
     }
 
-    /**
-     * 点击弹窗确定按钮
-     */
-    private void clickDialogConfirm(Page page) {
-        page.evaluate("""
-                () => {
-                  const dialog = document.querySelector('.next-dialog, [role="dialog"], .sku-dialog, .sku-spec-popup');
-                  if (!dialog) return false;
-                  const btns = dialog.querySelectorAll('.next-btn, .dialog-footer button, button');
-                  for (const btn of btns) {
-                    const text = btn.textContent.trim();
-                    if (text.includes('确定') || text.includes('确认') || text.includes('完成')) {
-                      const rect = btn.getBoundingClientRect();
-                      btn.scrollIntoView({ block: 'center' });
-                      btn.click();
-                      return true;
-                    }
-                  }
-                  return false;
-                }
-                """);
-        page.waitForTimeout(1500);
-    }
 
     /**
      * 获取当前页面属性布局（点击确定后）
