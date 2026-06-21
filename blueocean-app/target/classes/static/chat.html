@@ -45,7 +45,7 @@
         .token-count { font-size: 11px; color: #999; margin-top: 4px; }
 
         .input-area { display: flex; gap: 10px; padding: 15px 20px; border-top: 1px solid #e8e8e8; }
-        .input-area textarea { flex: 1; padding: 10px 14px; border: 1px solid #d9d9d9; border-radius: 8px; font-size: 14px; font-family: inherit; resize: none; height: 44px; line-height: 1.5; }
+        .input-area textarea { flex: 1; padding: 10px 14px; border: 1px solid #d9d9d9; border-radius: 8px; font-size: 14px; font-family: inherit; resize: vertical; min-height: 44px; line-height: 1.5; }
         .input-area textarea:focus { outline: none; border-color: #1890ff; box-shadow: 0 0 0 2px rgba(24,144,255,0.1); }
         .send-btn { padding: 0 24px; background: #1890ff; color: #fff; border: none; border-radius: 8px; font-size: 15px; cursor: pointer; transition: background 0.2s; white-space: nowrap; }
         .send-btn:hover { background: #40a9ff; }
@@ -119,42 +119,33 @@
 
     let loading = false;
     let chatAbortController = null;
-    let PROMPT_TEMPLATES = {};
+    let PROMPT_TEMPLATES = {
+        chat: '你是一个 helpful 的 AI 助手。请用简洁清晰的语言回答问题。'
+    };
 
-    PROMPT_TEMPLATES.title = `你是一位资深电商标题优化师，擅长为商品创作高搜索曝光、高点击率的标题。
-
-【核心约束】
-1. 起始词：所有标题必须以用户指定的核心关键词开头
-2. 字数限制：每条标题严格为30个汉字，不得多或少
-3. 生成数量：一次性生成10条标题
-4. 差异化：各条标题的卖点、造型、使用场景必须错开，杜绝内容雷同
-
-【创作方向】
-围绕产品适配人群、玩法用途、材质款式、使用场景重组语序句式，贴合电商用户搜索习惯，突出商品核心优势。仅使用原文已有的字词进行组合创作，禁止凭空杜撰陌生文字、新词或自创描述。
-
-【合规要求】
-语句通顺流畅，删除冗余堆砌词汇，全程规避违规敏感字词。兼顾标题规整度、搜索曝光度与商品营销吸引力。
-
-【输出格式】
-直接输出10条标题，每行一条，不要编号，不要解释。`;
-
-    // Load prompt templates from API
+    // 异步从 API 加载 filter/title 模板
     async function loadPromptTemplatesFromApi() {
         try {
-            const [chatResp, filterResp] = await Promise.all([
+            const [filterResp, titleResp] = await Promise.all([
                 fetch('/api/filter/prompts/system-prompt'),
-                fetch('/api/filter/prompts/system-prompt')
+                fetch('/api/filter/prompts/title-prompt')
             ]);
-            if (chatResp.ok) {
-                const chatData = await chatResp.json();
-                PROMPT_TEMPLATES.chat = '你是一个 helpful 的 AI 助手。请用简洁清晰的语言回答问题。';
-            }
             if (filterResp.ok) {
-                const filterData = await filterResp.json();
-                PROMPT_TEMPLATES.filter = filterData.prompt;
+                const data = await filterResp.json();
+                PROMPT_TEMPLATES.filter = data.prompt;
+                if (promptTemplate.value === 'filter' && !systemPromptInput.value.trim()) {
+                    systemPromptInput.value = data.prompt;
+                }
+            }
+            if (titleResp.ok) {
+                const data = await titleResp.json();
+                PROMPT_TEMPLATES.title = data.prompt;
+                if (promptTemplate.value === 'title' && !systemPromptInput.value.trim()) {
+                    systemPromptInput.value = data.prompt;
+                }
             }
         } catch (e) {
-            PROMPT_TEMPLATES.chat = '你是一个 helpful 的 AI 助手。请用简洁清晰的语言回答问题。';
+            console.warn('[Chat] 加载远程模板失败:', e.message);
         }
     }
 
@@ -165,6 +156,14 @@
         if (template && PROMPT_TEMPLATES[template]) {
             systemPromptInput.value = PROMPT_TEMPLATES[template];
             systemPromptInput.focus();
+        } else if (template) {
+            // 模板还未从 API 加载完成，提示用户
+            systemPromptInput.value = '模板加载中，请等待...';
+            setTimeout(() => {
+                if (systemPromptInput.value === '模板加载中，请等待...') {
+                    systemPromptInput.value = '';
+                }
+            }, 3000);
         }
     }
 
@@ -181,7 +180,6 @@
 
     function getConversationHistory() {
         const history = JSON.parse(localStorage.getItem('chatHistory') || '[]');
-        // Only send role + content, strip time field
         return history.map(m => ({ role: m.role, content: m.content }));
     }
 

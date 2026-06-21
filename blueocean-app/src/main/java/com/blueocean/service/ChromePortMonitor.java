@@ -27,7 +27,7 @@ public class ChromePortMonitor {
         this.chromeDebugConfig = chromeDebugConfig;
     }
 
-    @Scheduled(fixedRate = 60_000)
+    //@Scheduled(fixedRate = 60_000)
     public void checkAndLaunch() {
         if (isPortListening(TARGET_PORT)) {
             return;

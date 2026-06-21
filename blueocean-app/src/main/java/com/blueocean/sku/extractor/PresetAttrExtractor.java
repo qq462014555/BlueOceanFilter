@@ -10,8 +10,8 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * 预置 SKU 属性提取器
- * "销售属性"标签在 #struct-saleProp，按钮在相邻兄弟的容器里
- * 两个 div 是兄弟关系，不是父子关系
+ * 点击"添加规格(0/600)"按钮后，从 SKU 表格表头提取预设属性列名
+ * （排除颜色分类、价格、数量等系统列）
  */
 public class PresetAttrExtractor implements SkuAttrExtractor {
 
@@ -43,52 +43,54 @@ public class PresetAttrExtractor implements SkuAttrExtractor {
     @Override
     public List<String> extract(Page page) {
         try {
-            // 1. 循环删除所有已添加的属性（每次点第一个，等消失后再找下一个）
-            for (int i = 0; i < 10; i++) {
-                TimeUnit.SECONDS.sleep(1);
-                Object firstBtnCoords = page.evaluate("""
-                        () => {
-                          const salePropArea = document.querySelector('#sell-field-saleProp');
-                          if (!salePropArea) return null;
-                          const btns = salePropArea.querySelectorAll('button.delete');
-                          if (btns.length === 0) return null;
-                          const rect = btns[0].getBoundingClientRect();
-                          return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-                        }
-                        """);
-                if (firstBtnCoords == null) break;
+            // 系统列：这些是固定列，不算预设属性
+            java.util.Set<String> SYSTEM_COLS = java.util.Set.of(
+                    "SKU搜索主图", "颜色分类", "价格", "数量"
+            );
 
-                @SuppressWarnings("unchecked")
-                java.util.Map<String, Object> coord = (java.util.Map<String, Object>) firstBtnCoords;
-                double x = ((Number) coord.get("x")).doubleValue();
-                double y = ((Number) coord.get("y")).doubleValue();
-                page.mouse().click(x, y);
-                page.waitForTimeout(300);
-            }
-        } catch (Exception e) {
-            // 删除失败不影响后续提取
-        }
-
-        // 2. 从属性按钮容器提取 .next-btn-helper 的文本
-        @SuppressWarnings("unchecked")
-        List<String> result = (List<String>) page.evaluate("""
+            // 1. 点击"添加规格(0/600)"按钮
+            Object addBtnCoords = page.evaluate("""
                 () => {
-                  const controller = document.querySelector('.sell-component-custom-sale-props-controller');
-                  if (!controller) return [];
-
-                  const helpers = controller.querySelectorAll('.next-btn-helper');
-                  const props = [];
-                  for (const h of helpers) {
-                    const text = h.textContent.trim();
-                    if (text && text.length > 0 && text.length < 20
-                        && !text.includes('申报') && !text.includes('查看')) {
-                      props.push(text);
-                    }
-                  }
-                  return props;
+                  const xpath = "//*[contains(text(),'添加规格')]";
+                  const btn = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+                  if (!btn) return null;
+                  const rect = btn.getBoundingClientRect();
+                  return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
                 }
                 """);
-        return result;
+
+            if (addBtnCoords == null) {
+                return List.of();
+            }
+
+            @SuppressWarnings("unchecked")
+            java.util.Map<String, Object> coord = (java.util.Map<String, Object>) addBtnCoords;
+            double x = ((Number) coord.get("x")).doubleValue();
+            double y = ((Number) coord.get("y")).doubleValue();
+            page.mouse().click(x, y);
+            page.waitForTimeout(800);
+
+            // 2. 从表头提取预设属性列名
+            @SuppressWarnings("unchecked")
+            List<String> result = (List<String>) page.evaluate("""
+                    (systemCols) => {
+                      const heads = document.querySelectorAll('.sell-sku-head-cell[title]');
+                      const attrs = [];
+                      for (const head of heads) {
+                        const title = head.getAttribute('title').trim();
+                        if (!title) continue;
+                        if (!systemCols.includes(title)) {
+                          attrs.push(title);
+                        }
+                      }
+                      return attrs;
+                    }
+                    """, new ArrayList<>(SYSTEM_COLS));
+            return result;
+        } catch (Exception e) {
+            System.out.println("[PresetAttrExtractor] 提取失败: " + e.getMessage());
+            return List.of();
+        }
     }
 
     /**

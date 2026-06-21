@@ -82,6 +82,7 @@ public class LinkFileReader {
     public static List<LinkEntry> read(File file) throws IOException {
         List<LinkEntry> entries = new ArrayList<>();
         String currentCategory = "";
+        String pendingTitle = null; // 处理"标题在前URL在后"的格式
 
         try (BufferedReader br = new BufferedReader(new FileReader(file))) {
             String line;
@@ -94,16 +95,28 @@ public class LinkFileReader {
                     currentCategory = line.substring(line.indexOf(sep) + 1).trim();
                 } else if (line.startsWith("标题：") || line.startsWith("标题:")) {
                     String sep = line.contains("：") ? "：" : ":";
-                    String title = line.substring(line.indexOf(sep) + 1).trim();
-                    if (!entries.isEmpty()) {
-                        entries.get(entries.size() - 1).setTitle(title);
-                    }
+                    pendingTitle = line.substring(line.indexOf(sep) + 1).trim();
                 } else if (line.startsWith("http")) {
-                    entries.add(new LinkEntry(currentCategory, line));
-                } else if (isTitle(line) && !entries.isEmpty()) {
-                    // 标题独占一行：6个以上汉字，紧跟在上一个链接后面
-                    entries.get(entries.size() - 1).setTitle(line);
-                    log.info("识别到标题: '{}'", line);
+                    LinkEntry entry = new LinkEntry(currentCategory, line);
+                    if (pendingTitle != null) {
+                        entry.setTitle(pendingTitle);
+                        pendingTitle = null;
+                    }
+                    entries.add(entry);
+                } else if (isTitle(line)) {
+                    // 标题独占一行：下方紧跟该标题对应的商品链接
+                    // 如果上一个条目还没有标题，且没有待分配的标题 → 旧格式（标题在URL后）
+                    boolean assigned = false;
+                    if (pendingTitle == null && !entries.isEmpty() && entries.get(entries.size() - 1).getTitle() == null) {
+                        entries.get(entries.size() - 1).setTitle(line);
+                        assigned = true;
+                        log.info("识别到标题(后置): '{}'", line);
+                    }
+                    if (!assigned) {
+                        // 新格式（标题在URL前）→ 暂存等待下一条URL
+                        pendingTitle = line;
+                        log.info("识别到标题(前置): '{}'", line);
+                    }
                 }
             }
         }

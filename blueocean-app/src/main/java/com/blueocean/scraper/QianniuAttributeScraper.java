@@ -253,7 +253,7 @@ public class QianniuAttributeScraper {
 
                 // 提取当前 overlay 中的可见选项
                 List<String> texts = (List<String>) page.evaluate("() => {\n" +
-                        "  const overlays = Array.from(document.querySelectorAll('.next-overlay-wrapper, .options-content'));\n" +
+                        "  const overlays = Array.from(document.querySelectorAll('next-overlay-wrapper,.next-overlay-wrapper.opened, .options-content'));\n" +
                         "  const overlay = overlays.length > 0 ? overlays[overlays.length - 1] : null;\n" +
                         "  if (!overlay) return [];\n" +
                         "  const items = overlay.querySelectorAll('.options-item');\n" +
@@ -269,14 +269,14 @@ public class QianniuAttributeScraper {
                 if (texts != null) {
                     for (String t : texts) {
                         if (collected.add(t)) {
-                            log.debug("  新选项: {}", t);
+                            log.info("  新选项: {}", t);
                         }
                     }
                 }
 
                 // 判断是否还有更多内容
                 Object hasMore = page.evaluate("() => {\n" +
-                        "  const sc = Array.from(document.querySelectorAll('.next-overlay-wrapper, .options-content')).pop();\n" +
+                        "  const sc = Array.from(document.querySelectorAll('.next-overlay-wrapper,.next-overlay-wrapper.opened,.options-content')).pop();\n" +
                         "  if (!sc) return false;\n" +
                         "  return sc.scrollTop + sc.clientHeight < sc.scrollHeight - 5;\n" +
                         "}");

@@ -475,6 +475,7 @@ async function confirmUpload() {
         formData.append('file', fileBlob, 'image.jpg');
         const resp = await fetch('/api/files/create-image', { method: 'POST', body: formData });
         if (resp.ok) {
+            const data = await resp.json();
             // Save backup for the newly uploaded image
             if (!imageBackups.has(uploadTargetPath)) {
                 const uploadBuffer = await fileBlob.arrayBuffer();
@@ -522,6 +523,14 @@ async function confirmUpload() {
                 '<button class="action-btn btn-delete" data-path="' + escapeAttr(respPath) + '" onclick="deleteImageByAttr(this)">删除</button></div>';
             fillMissingMainImageSlots(itemEl.closest('.product-card'));
             addAddPlaceholder(itemEl);
+            // 刷新主图区域
+            const mainSection = Array.from(itemEl.closest('.product-card').querySelectorAll('.section')).find(s => {
+                const t = s.querySelector('.section-title');
+                return t && t.textContent.trim().startsWith('主图');
+            });
+            if (mainSection) {
+                mainSection.querySelectorAll('.image-grid img').forEach(img => img.src = img.src.split('?')[0] + '?t=' + Date.now());
+            }
             showToast('已上传', 'success'); closeUploadModal();
         } else { showToast('上传失败: ' + (await resp.json()).error, 'error'); }
     } catch (e) { showToast('请求失败: ' + e.message, 'error'); }
@@ -1057,181 +1066,30 @@ async function restoreVideo(btn) {
     finally { btn.textContent = '复原'; btn.disabled = false; }
 }
 
-// ==================== SKU Row Drag Reorder ====================
+// ==================== SKU Row Drag Reorder (SortableJS) ====================
 
-let skuDragSrcRow = null;
-let skuLongPressTimer = null;
-let skuLongPressFired = false;
+/**
+ * 缓存每个 tbody 的 Sortable 实例，用于销毁重建
+ */
+const _skuSortableMap = new Map();
 
 function setupSkuDrag(card) {
-    const tables = card.querySelectorAll('.sku-table-draggable tbody');
-    tables.forEach(tbody => {
-        const rows = tbody.querySelectorAll('.sku-row');
-        rows.forEach(row => {
-            row.addEventListener('mousedown', skuMouseDown);
-            row.addEventListener('dragstart', skuDragStart);
-            row.addEventListener('dragend', skuDragEnd);
-            row.addEventListener('dragover', skuDragOver);
-            row.addEventListener('dragleave', skuDragLeave);
-            row.addEventListener('drop', skuDrop);
-            // Touch support
-            row.addEventListener('touchstart', skuTouchStart, { passive: false });
-            row.addEventListener('touchmove', skuTouchMove, { passive: false });
-            row.addEventListener('touchend', skuTouchEnd, { passive: false });
-        });
-    });
-}
+    const tbodies = card.querySelectorAll('.sku-table-draggable tbody');
+    tbodies.forEach(tbody => {
+        // 销毁旧实例
+        const existing = _skuSortableMap.get(tbody);
+        if (existing) { existing.destroy(); _skuSortableMap.delete(tbody); }
 
-function skuMouseDown(e) {
-    const row = this;
-    skuLongPressFired = false;
-    skuLongPressTimer = setTimeout(() => {
-        skuLongPressFired = true;
-        row.setAttribute('draggable', 'true');
-        row.style.cursor = 'grabbing';
-    }, 500);
-}
-
-function skuTouchStart(e) {
-    const row = this;
-    skuDragSrcRow = row;
-    skuLongPressFired = false;
-    skuLongPressTimer = setTimeout(() => {
-        skuLongPressFired = true;
-        row.style.opacity = '0.4';
-        row.style.cursor = 'grabbing';
-    }, 500);
-}
-
-function skuTouchMove(e) {
-    if (!skuLongPressFired) { clearTimeout(skuLongPressTimer); return; }
-    e.preventDefault();
-    const touch = e.touches[0];
-    const target = document.elementFromPoint(touch.clientX, touch.clientY);
-    const targetRow = target ? target.closest('.sku-row') : null;
-    clearSkuDropIndicators();
-    if (targetRow && targetRow !== skuDragSrcRow) {
-        const rect = targetRow.getBoundingClientRect();
-        const midY = rect.top + rect.height / 2;
-        if (touch.clientY < midY) {
-            targetRow.classList.add('sku-drop-above');
-        } else {
-            targetRow.classList.add('sku-drop-below');
-        }
-    }
-}
-
-function skuTouchEnd(e) {
-    clearTimeout(skuLongPressTimer);
-    if (!skuLongPressFired || !skuDragSrcRow) {
-        skuDragSrcRow = null;
-        clearSkuDropIndicators();
-        return;
-    }
-    e.preventDefault();
-    const touch = e.changedTouches[0];
-    const target = document.elementFromPoint(touch.clientX, touch.clientY);
-    const targetRow = target ? target.closest('.sku-row') : null;
-
-    if (targetRow && targetRow !== skuDragSrcRow) {
-        const tbody = skuDragSrcRow.closest('tbody');
-        const allRows = Array.from(tbody.querySelectorAll('.sku-row'));
-        const srcIdx = allRows.indexOf(skuDragSrcRow);
-        const tgtIdx = allRows.indexOf(targetRow);
-
-        const rect = targetRow.getBoundingClientRect();
-        const midY = rect.top + rect.height / 2;
-        const insertIdx = touch.clientY < midY ? tgtIdx : tgtIdx + 1;
-
-        skuDragSrcRow.remove();
-        const currentRows = tbody.querySelectorAll('.sku-row');
-        if (insertIdx >= currentRows.length) {
-            tbody.appendChild(skuDragSrcRow);
-        } else {
-            tbody.insertBefore(skuDragSrcRow, currentRows[insertIdx]);
-        }
-
-        skuDragSrcRow.style.opacity = '';
-        skuDragSrcRow.style.cursor = '';
-        clearSkuDropIndicators();
-        submitSkuReorder(tbody);
-    } else {
-        if (skuDragSrcRow) {
-            skuDragSrcRow.style.opacity = '';
-            skuDragSrcRow.style.cursor = '';
-        }
-        clearSkuDropIndicators();
-    }
-    skuDragSrcRow = null;
-    skuLongPressFired = false;
-}
-
-function skuDragStart(e) {
-    if (!skuLongPressFired) { e.preventDefault(); return; }
-    skuDragSrcRow = this;
-    this.classList.add('sku-dragging');
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', '');
-    const blank = document.createElement('canvas');
-    blank.width = 1; blank.height = 1;
-    e.dataTransfer.setDragImage(blank, 0, 0);
-}
-
-function skuDragEnd() {
-    if (skuDragSrcRow) skuDragSrcRow.classList.remove('sku-dragging');
-    clearSkuDropIndicators();
-    skuDragSrcRow = null;
-}
-
-function skuDragOver(e) {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    if (this === skuDragSrcRow) return;
-    clearSkuDropIndicators();
-    const rect = this.getBoundingClientRect();
-    const midY = rect.top + rect.height / 2;
-    if (e.clientY < midY) {
-        this.classList.add('sku-drop-above');
-    } else {
-        this.classList.add('sku-drop-below');
-    }
-}
-
-function skuDragLeave(e) {
-    this.classList.remove('sku-drop-above', 'sku-drop-below');
-}
-
-function skuDrop(e) {
-    e.preventDefault();
-    if (this === skuDragSrcRow) return;
-    clearSkuDropIndicators();
-
-    const tbody = skuDragSrcRow.closest('tbody');
-    const allRows = Array.from(tbody.querySelectorAll('.sku-row'));
-    const srcIdx = allRows.indexOf(skuDragSrcRow);
-    const tgtIdx = allRows.indexOf(this);
-
-    const rect = this.getBoundingClientRect();
-    const midY = rect.top + rect.height / 2;
-    const insertIdx = e.clientY < midY ? tgtIdx : tgtIdx + 1;
-
-    skuDragSrcRow.classList.remove('sku-dragging');
-    skuDragSrcRow.remove();
-
-    const currentRows = tbody.querySelectorAll('.sku-row');
-    if (insertIdx >= currentRows.length) {
-        tbody.appendChild(skuDragSrcRow);
-    } else {
-        tbody.insertBefore(skuDragSrcRow, currentRows[insertIdx]);
-    }
-
-    skuDragSrcRow = null;
-    submitSkuReorder(tbody);
-}
-
-function clearSkuDropIndicators() {
-    document.querySelectorAll('.sku-drop-above, .sku-drop-below').forEach(el => {
-        el.classList.remove('sku-drop-above', 'sku-drop-below');
+        _skuSortableMap.set(tbody, new Sortable(tbody, {
+            animation: 200,
+            ghostClass: 'sortable-ghost',
+            chosenClass: 'sortable-chosen',
+            dragClass: 'sortable-drag',
+            onEnd: function(evt) {
+                if (evt.newIndex === evt.oldIndex) return;
+                submitSkuReorder(tbody);
+            }
+        }));
     });
 }
 
@@ -1244,16 +1102,17 @@ async function submitSkuReorder(tbody) {
     if (!productDir) return;
 
     const rows = tbody.querySelectorAll('.sku-row');
-    const orderedSkuIds = [];
+    const orderedSpecNames = [];
     rows.forEach(row => {
-        orderedSkuIds.push(row.getAttribute('data-sku-id'));
+        const specCell = row.querySelector('.sku-spec-name-cell');
+        orderedSpecNames.push(specCell ? specCell.textContent.trim() : '');
     });
 
     try {
         const resp = await fetch('/api/files/reorder-skus', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ productDir, orderedSkuIds })
+            body: JSON.stringify({ productDir, orderedSpecNames })
         });
         const respData = await resp.json();
         if (!resp.ok || respData.error) {
@@ -1261,13 +1120,187 @@ async function submitSkuReorder(tbody) {
             return;
         }
         showToast('SKU顺序已更新', 'success');
-
-        rows.forEach((row) => {
-            row.style.transition = 'transform 0.3s ease';
-            row.style.boxShadow = '0 0 8px rgba(255,106,0,0.4)';
-            setTimeout(() => { row.style.boxShadow = ''; row.style.transition = ''; }, 400);
+        const skuSection = Array.from(card.querySelectorAll('.section')).find(s => {
+            const t = s.querySelector('.section-title');
+            return t && t.textContent.trim().startsWith('SKU图');
         });
+        if (skuSection) skuSection.querySelector('.image-grid').querySelectorAll('img').forEach(img => img.src = img.src.split('?')[0] + '?t=' + Date.now());
     } catch (e) {
         showToast('SKU重排请求失败: ' + e.message, 'error');
     }
+}
+
+/**
+ * 删除 SKU 行，同步到商品数据.json、价格表.csv、商品属性.json
+ */
+async function deleteSkuRow(btn) {
+    const specName = btn.getAttribute('data-spec-name');
+    if (!specName) return;
+
+    showConfirm('确定删除 SKU「' + specName + '」？', 'danger', async function(ok) {
+        if (!ok) return;
+
+        const row = btn.closest('.sku-row');
+        const card = row.closest('.product-card');
+        const titleEl = card ? card.querySelector('.product-title[data-product-dir]') : null;
+        const productDir = titleEl ? titleEl.getAttribute('data-product-dir') || '' : '';
+        if (!productDir) { showToast('无法定位商品目录', 'error'); return; }
+
+        try {
+            const resp = await fetch('/api/files/delete-sku', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ productDir, specName })
+            });
+            const data = await resp.json();
+            if (!resp.ok || data.error) {
+                showToast('删除失败: ' + (data.error || data.message), 'error');
+                return;
+            }
+            row.remove();
+
+            // 更新 badge
+            card.querySelectorAll('.section').forEach(s => {
+                const t = s.querySelector('.section-title');
+                if (t && t.textContent.trim().startsWith('SKU 信息')) {
+                    const badge = t.querySelector('.badge');
+                    if (badge) badge.textContent = parseInt(badge.textContent) - 1;
+                }
+            });
+
+            // 刷新 SKU 图区域（从后端重新获取图片列表）
+            const skuImgSection = Array.from(card.querySelectorAll('.section')).find(s => {
+                const t = s.querySelector('.section-title');
+                return t && t.textContent.trim().startsWith('SKU图');
+            });
+            if (skuImgSection) {
+                const productDir = skuImgSection.getAttribute('data-product-dir') || '';
+                const listResp = await fetch('/api/files/list-images', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ productDir })
+                });
+                if (listResp.ok) {
+                    const listData = await listResp.json();
+                    const skuImages = listData.skuImages || [];
+                    const paths = skuImages.map(img => img.path);
+                    const totalSlots = paths.length;
+
+                    const slotMap = {};
+                    paths.forEach(path => {
+                        const fileName = path.split(/[\\/]/).pop();
+                        const match = fileName.match(/SKU图_(\d+)/);
+                        if (match) slotMap[parseInt(match[1], 10)] = path;
+                    });
+
+                    let html = '';
+                    for (let si = 1; si <= totalSlots; si++) {
+                        const siFile = slotMap[si] || null;
+                        if (siFile) {
+                            const siName = siFile.split(/[\\/]/).pop();
+                            html += '<div class="img-item" data-filepath="' + escapeAttr(siFile) + '">';
+                            html += '<div class="img-wrap">';
+                            html += '<img draggable="true" src="' + escapeHtml(toFileUrl(siFile)) + '?t=' + Date.now() + '" onclick="showModal(this.src)" title="' + escapeHtml(siName) + '">';
+                            html += '<div class="img-label">' + escapeHtml(siName) + '</div>';
+                            html += '</div>';
+                            html += '<div class="img-actions-bar">';
+                            html += '<button class="action-btn btn-replace" data-path="' + escapeAttr(siFile) + '" onclick="replaceImageByAttr(this)">替换</button>';
+                            html += '<button class="action-btn restore-btn btn-restore" data-path="' + escapeAttr(siFile) + '" onclick="restoreImageByAttr(this)">复原</button>';
+                            html += '<button class="action-btn btn-delete" data-path="' + escapeAttr(siFile) + '" onclick="deleteImageByAttr(this)">删除</button>';
+                            html += '</div></div>';
+                        } else {
+                            const placeholderName = 'SKU图_' + String(si).padStart(2, '0') + '.jpg';
+                            const placeholderPath = productDir + '\\SKU图\\' + placeholderName;
+                            html += '<div class="img-item" data-filepath="' + escapeAttr(placeholderPath) + '">';
+                            html += '<div class="img-placeholder" onclick="openUploadModal(this, \'' + escapeJs(placeholderPath) + '\', \'SKU图_' + String(si).padStart(2, '0') + '\')">';
+                            html += '<div class="placeholder-icon">+</div>';
+                            html += '<div class="placeholder-text">' + escapeHtml(placeholderName) + '</div>';
+                            html += '</div>';
+                            html += '<div class="img-actions-bar">';
+                            html += '<button class="action-btn btn-replace" data-path="' + escapeAttr(placeholderPath) + '" onclick="replacePlaceholder(this)">替换</button>';
+                            html += '<button class="action-btn btn-delete" data-path="' + escapeAttr(placeholderPath) + '" onclick="deleteImageByAttr(this)">删除</button>';
+                            html += '</div></div>';
+                        }
+                    }
+
+                    const grid = skuImgSection.querySelector('.image-grid');
+                    if (grid) {
+                        if (_skuSortableMap.has(grid)) { _skuSortableMap.get(grid).destroy(); _skuSortableMap.delete(grid); }
+                        grid.innerHTML = html;
+                        if (typeof setupSkuImageDrag === 'function') setupSkuImageDrag(card);
+                        const badge = skuImgSection.querySelector('.section-title .badge');
+                        if (badge) badge.textContent = totalSlots;
+                    }
+                }
+            }
+
+            showToast('已删除', 'success');
+        } catch (e) {
+            showToast('删除请求失败: ' + e.message, 'error');
+        }
+    });
+}
+
+/**
+ * 新增 SKU 行
+ */
+function addSkuRow(btn, productDir) {
+    if (!productDir) return;
+
+    const section = btn.closest('.section');
+    const card = section.closest('.product-card');
+    const tbody = section.querySelector('.sku-table-draggable tbody');
+
+    const specName = prompt('请输入规格名称：');
+    if (!specName || !specName.trim()) return;
+
+    const originalPrice = prompt('请输入批发价：', '0') || '0';
+    const shippingFee = prompt('请输入运费：', '0') || '0';
+    const finalPrice = prompt('请输入最终价格：', '0') || '0';
+
+    fetch('/api/files/add-sku', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productDir, specName: specName.trim(), originalPrice: parseFloat(originalPrice), shippingFee: parseFloat(shippingFee), finalPrice: parseFloat(finalPrice) })
+    })
+    .then(resp => resp.json())
+    .then(data => {
+        if (data.error) { showToast('新增失败: ' + data.error, 'error'); return; }
+
+        const skuId = data.skuId || '';
+        const discountPrice = data.discountPrice != null ? data.discountPrice : data.finalPrice * 0.8;
+        const profit = data.profit != null ? data.profit : discountPrice - data.originalPrice;
+
+        const fieldNames = [];
+        const firstRow = tbody.querySelector('.sku-row');
+        if (firstRow) {
+            firstRow.querySelectorAll('td').forEach((td, idx) => {
+                if (idx >= 2 && idx < firstRow.querySelectorAll('td').length - 3) {
+                    const th = tbody.closest('table').querySelector('thead th:nth-child(' + (idx + 1) + ')');
+                    if (th) fieldNames.push(th.textContent.trim());
+                }
+            });
+        }
+
+        let html = '<tr class="sku-row" data-sku-id="' + escapeAttr(skuId) + '">';
+        html += '<td>-</td>';
+        html += '<td class="sku-spec-name-cell" data-spec-name="1" data-product-dir="' + escapeAttr(productDir) + '">' + escapeHtml(specName) + '</td>';
+        fieldNames.forEach(fn => html += '<td>-</td>');
+        html += '<td><span class="original-price">¥' + data.originalPrice.toFixed(2) + '</span></td>';
+        html += '<td><span class="price">¥' + data.finalPrice.toFixed(2) + '</span></td>';
+        html += '<td><span class="price">¥' + discountPrice.toFixed(2) + '</span></td>';
+        html += '<td style="color:' + (profit >= 0 ? '#52c41a' : '#ff4d4f') + '">¥' + profit.toFixed(2) + '</td>';
+        html += '<td>' + (data.stock || 0) + '</td>';
+        html += '<td><button class="action-btn sku-delete-btn" data-spec-name="' + escapeAttr(specName) + '" onclick="deleteSkuRow(this)">删除</button></td>';
+        html += '</tr>';
+        tbody.insertAdjacentHTML('beforeend', html);
+
+        const badge = section.querySelector('.section-title .badge');
+        if (badge) badge.textContent = parseInt(badge.textContent) + 1;
+
+        setupSkuDrag(card);
+
+        showToast('已新增', 'success');
+    })
+    .catch(e => showToast('新增请求失败: ' + e.message, 'error'));
 }

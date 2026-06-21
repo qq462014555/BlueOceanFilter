@@ -72,7 +72,10 @@
       "Bash(python3 *)",
       "WebFetch(domain:cdn.jsdelivr.net)",
       "Bash(xargs head -5)",
-      "Bash(xargs head -2)"
+      "Bash(xargs head -2)",
+      "Bash(jar tf *)",
+      "Bash(./mvnw.cmd --version)",
+      "Bash(unzip -l .mvn/wrapper/maven-wrapper.jar)"
     ]
   }
 }

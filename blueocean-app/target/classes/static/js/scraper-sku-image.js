@@ -151,18 +151,13 @@ document.addEventListener('dblclick', function(e) {
         const newName = input.value.trim();
         if (!newName || newName === oldName) { td.textContent = oldName; return; }
         try {
-            const body = JSON.stringify({ productDir, oldName, newName });
-            console.log('rename-sku request:', body);
             const resp = await fetch('/api/files/rename-sku', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: body
+                body: JSON.stringify({ productDir, oldName, newName })
             });
             const data = await resp.json();
-            console.log('rename-sku response:', resp.status, data);
             if (!resp.ok || data.error) { showToast('失败: ' + (data.error || data.message), 'error'); td.textContent = oldName; return; }
-            td.textContent = newName;
-            showToast('已更新', 'success');
             td.textContent = newName;
             showToast('已更新', 'success');
         } catch (e) {

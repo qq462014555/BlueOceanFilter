@@ -11,4 +11,5 @@ com\blueocean\taobao\controller\TaobaoAdMonitorController.class
 com\blueocean\taobao\entity\TaobaoAdRecord.class
 com\blueocean\taobao\service\TaobaoAdSyncService.class
 com\blueocean\taobao\service\SxkcScraper$ShopDetailResult.class
+com\blueocean\taobao\enums\TimeRange.class
 com\blueocean\taobao\mapper\TaobaoShopMapper.class

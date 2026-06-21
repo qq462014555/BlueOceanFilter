@@ -25,7 +25,7 @@ mybatis-plus:
 #    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
 
 app:
-  dashscope-api-key: sk-b2307eb31b1c4100ab1d30d599753475
+  dashscope-api-key: sk-af8375bb801743cb8dccd5b76e62ecc9
   batch-size: 200
   retry-times: 3
   sleep-ms: 1000

@@ -38,7 +38,7 @@ public class OpenClawController {
     }
 
     // 每10秒自动监控OpenClaw状态
-    @Scheduled(fixedRate = 10000)
+/*    @Scheduled(fixedRate = 10000)*/
     public void monitorStatus() {
         boolean nowRunning = checkPortOpen();
         String time = new SimpleDateFormat("HH:mm:ss").format(new Date());

@@ -238,7 +238,8 @@ function buildProductCardHtml(product, isFromScrape) {
     // SKU price table
     if (product.skus && product.skus.length > 0) {
         html += '<div class="section" data-product-dir="' + escapeAttr(product.productDir || '') + '">';
-        html += '<div class="section-title">SKU 信息 <span class="badge">' + product.skus.length + '</span></div>';
+        html += '<div class="section-title">SKU 信息 <span class="badge">' + product.skus.length + '</span>';
+        html += '<button class="sku-add-btn" onclick="addSkuRow(this, \'' + escapeJs(product.productDir || '') + '\')">新增</button></div>';
         html += '<table class="sku-table sku-table-draggable">';
         let fieldNames = [];
         if (product.skus.length > 0 && product.skus[0].detailFields) {

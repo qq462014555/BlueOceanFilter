@@ -443,6 +443,79 @@ public class FileController {
         return ResponseEntity.ok(Collections.singletonMap("message", "已删除"));
     }
 
+    // ==================== SKU Add ====================
+
+    @PostMapping("/add-sku")
+    public ResponseEntity<?> addSku(@RequestBody Map<String, Object> request) throws IOException {
+        String productDir = (String) request.get("productDir");
+        String specName = (String) request.get("specName");
+        double originalPrice = ((Number) request.getOrDefault("originalPrice", 0.0)).doubleValue();
+        double shippingFee = ((Number) request.getOrDefault("shippingFee", 0.0)).doubleValue();
+        double finalPrice = ((Number) request.getOrDefault("finalPrice", 0.0)).doubleValue();
+        if (productDir == null || specName == null) {
+            return ResponseEntity.badRequest().body("缺少参数");
+        }
+
+        Path prodDir = Paths.get(productDir);
+        Path jsonPath = prodDir.resolve("商品数据.json");
+        if (!Files.exists(jsonPath)) {
+            return ResponseEntity.badRequest().body("商品数据.json不存在");
+        }
+
+        String jsonContent = Files.readString(jsonPath);
+        Map<String, Object> jsonData = mapper.readValue(jsonContent, Map.class);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> skus = (List<Map<String, Object>>) jsonData.get("skus");
+        if (skus == null) skus = new ArrayList<>();
+
+        Map<String, Object> newSku = new LinkedHashMap<>();
+        String skuId = UUID.randomUUID().toString().substring(0, 8);
+        newSku.put("skuId", skuId);
+        newSku.put("specName", specName);
+        newSku.put("originalPrice", originalPrice);
+        newSku.put("shippingFee", shippingFee);
+        newSku.put("finalPrice", finalPrice);
+        newSku.put("discountPrice", finalPrice * 0.8);
+        newSku.put("profit", finalPrice * 0.8 - originalPrice);
+        newSku.put("stock", 0);
+        skus.add(newSku);
+
+        jsonData.put("skus", skus);
+        Files.writeString(jsonPath, mapper.writerWithDefaultPrettyPrinter().writeValueAsString(jsonData));
+
+        // 价格表.csv
+        Path csvPath = prodDir.resolve("价格表.csv");
+        if (Files.exists(csvPath)) {
+            List<String> lines = Files.readAllLines(csvPath);
+            String csvLine = formatSkuCsvLine(newSku);
+            lines.add(csvLine);
+            Files.write(csvPath, lines, java.nio.file.StandardOpenOption.TRUNCATE_EXISTING);
+        }
+
+        // 商品属性.json
+        Path attrPath = prodDir.resolve("商品属性.json");
+        if (Files.exists(attrPath)) {
+            String attrContent = Files.readString(attrPath);
+            Map<String, Object> attrs = mapper.readValue(attrContent, Map.class);
+            String colorField = (String) attrs.get("颜色");
+            String newColorOrder = skus.stream()
+                    .map(s -> String.valueOf(s.get("specName")))
+                    .filter(s -> !s.isEmpty())
+                    .collect(java.util.stream.Collectors.joining(","));
+            attrs.put("颜色", newColorOrder);
+            Files.writeString(attrPath, mapper.writerWithDefaultPrettyPrinter().writeValueAsString(attrs));
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("skuId", skuId);
+        result.put("originalPrice", originalPrice);
+        result.put("finalPrice", finalPrice);
+        result.put("discountPrice", newSku.get("discountPrice"));
+        result.put("profit", newSku.get("profit"));
+        result.put("stock", 0);
+        return ResponseEntity.ok(result);
+    }
+
     // ==================== Product Loading ====================
 
     @GetMapping("/load-products")

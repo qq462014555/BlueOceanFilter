@@ -28,6 +28,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -38,8 +39,21 @@ public class ProductScraper {
 
     private final PaddleOcrService ocrService;
 
+    /** 进度回调，用于向前端推送实时日志 */
+    private Consumer<String> progressCallback;
+
     public ProductScraper(PaddleOcrService ocrService) {
         this.ocrService = ocrService;
+    }
+
+    public void setProgressCallback(Consumer<String> callback) {
+        this.progressCallback = callback;
+    }
+
+    private void logProgress(String msg) {
+        if (progressCallback != null) {
+            progressCallback.accept(msg);
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -82,6 +96,7 @@ public class ProductScraper {
         try {
             Browser browser = playwright.chromium().connectOverCDP(ScraperConfig.CDP_ENDPOINT);
             log.info("CDP 连接成功: {}", ScraperConfig.CDP_ENDPOINT);
+            logProgress("CDP 连接成功");
 
             BrowserContext mainContext = browser.contexts().isEmpty()
                     ? browser.newContext()
@@ -120,6 +135,7 @@ public class ProductScraper {
                             String cleanUrl = UrlCleaner.clean(link.getUrl());
                             int idx = processedCount.incrementAndGet();
                             log.info("[{}] [{}/{}] 抓取: {} ({})", threadName, idx, pendingLinks.size(), link.getUrl(), link.getCategoryPath());
+                                            logProgress(String.format("[%d/%d] 抓取: %s (%s)", idx, pendingLinks.size(), link.getTitle() != null ? link.getTitle() : link.getUrl(), link.getCategoryPath()));
 
                             int retries = 0;
                             boolean success = false;
@@ -135,8 +151,9 @@ public class ProductScraper {
                                 } catch (Exception e) {
                                     retries++;
                                     log.warn("[{}] 第 {} 次重试失败: {}", threadName, retries, e.getMessage());
-                                    if (retries >= ScraperConfig.MAX_RETRIES) {
-                                        log.error("[{}] 商品抓取失败，已重试 {} 次: {}", threadName, ScraperConfig.MAX_RETRIES, link.getUrl());
+                                            if (retries >= ScraperConfig.MAX_RETRIES) {
+                                                log.error("[{}] 商品抓取失败，已重试 {} 次: {}", threadName, ScraperConfig.MAX_RETRIES, link.getUrl());
+                                                logProgress(String.format("❌ 抓取失败(已重试%d次): %s", ScraperConfig.MAX_RETRIES, link.getUrl()));
                                     } else {
                                         try { Thread.sleep(retries * 2000L); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); return; }
                                     }
@@ -163,6 +180,7 @@ public class ProductScraper {
                 try { pg.close(); } catch (Exception ignored) {}
             }
             log.info("采集完成，浏览器保持运行不关闭");
+            logProgress("采集完成");
         } catch (Exception e) {
             log.error("采集过程异常", e);
         }
@@ -209,6 +227,7 @@ public class ProductScraper {
             return null;
         }
         log.info("检测到布局: {}", layout);
+        logProgress(String.format("  检测到布局: %s", layout));
 
         ProductData product = new ProductData();
         product.setUrl(url);
@@ -219,12 +238,15 @@ public class ProductScraper {
 
         // 提取标题
         log.info("[步骤] 提取标题...");
+        logProgress("  [步骤] 提取标题...");
         String title = extractTitle(page);
         product.setTitle(title);
         log.info("[成功] 标题: {}", title);
+        logProgress("  [成功] 标题: " + title);
 
         // 提取商品属性
         log.info("[步骤] 提取商品属性...");
+        logProgress("  [步骤] 提取商品属性...");
         Map<String, String> attributes = extractAttributes(page);
         product.setAttributes(attributes);
         log.info("[成功] 属性: {} 个", attributes.size());
@@ -255,6 +277,7 @@ public class ProductScraper {
         List<String> mainImages = extractMainImages(page, layout);
         product.setMainImages(mainImages);
         log.info("[成功] 主图: {} 张", mainImages.size());
+        logProgress(String.format("  [成功] 主图: %d 张", mainImages.size()));
 
         // 提取详情图
         log.info("[步骤] 提取详情图...");
@@ -268,6 +291,7 @@ public class ProductScraper {
 
         // 提取 SKU 基础信息（规格名+规格图）
         log.info("[步骤] 提取 SKU 信息...");
+        logProgress("  [步骤] 提取 SKU 信息...");
         List<SkuData> skuList = extractSkuBaseInfo(page, layout);
 
         // 合并 API 定价数据
@@ -295,35 +319,44 @@ public class ProductScraper {
         }
         product.setSkus(skuList);
         log.info("[成功] SKU 价格计算完成: {} 个", skuList.size());
+        logProgress(String.format("  [成功] SKU: %d 个", skuList.size()));
 
         // 创建输出目录
         log.info("[步骤] 创建输出目录...");
+        logProgress("  [步骤] 创建输出目录...");
         log.info("[调试] dirTitle 判断: link.getTitle()='{}', 爬取title='{}'", link.getTitle(), title);
         String dirTitle = (link.getTitle() != null && !link.getTitle().isEmpty()) ? link.getTitle() : title;
         log.info("[调试] 最终使用 dirTitle='{}'", dirTitle);
         String productDir = createProductDirectory(link.getCategoryPath(), dirTitle);
         product.setProductDir(productDir);
         log.info("[成功] 目录: {}", productDir);
+        logProgress("  ✅ 输出目录: " + productDir);
 
         // 生成包装信息图片，放在详情图目录中
         log.info("[步骤] 生成包装信息图片...");
         String packImagePath = generatePackInfoImage(product, packInfo);
         log.info("[成功] 包装信息图片已保存: {}", packImagePath);
+        logProgress("  ✅ 包装信息图片已生成");
 
         // 保存采集到的商品属性到本地（供后续AI映射使用）
         log.info("[步骤] 保存商品属性...");
         com.blueocean.scraper.AttributeSaver.save(productDir, attributes);
         log.info("[成功] 商品属性已保存，共 {} 个", attributes.size());
+        logProgress("  ✅ 商品属性已保存");
 
         // 下载图片
         log.info("[步骤] 下载主图...");
+        logProgress("  [步骤] 下载主图...");
         List<String> mainImagePaths = downloadImages(product, "主图", mainImages, page);
         product.setMainImages(mainImagePaths);
         log.info("[成功] 主图下载完成");
+        logProgress("  ✅ 主图下载完成");
 
         log.info("[步骤] 下载详情图...");
+        logProgress("  [步骤] 下载详情图...");
         List<String> detailImagePaths = downloadImages(product, "详情图", detailImages, page);
         log.info("[成功] 详情图下载完成");
+        logProgress("  ✅ 详情图下载完成");
 
         // 包装信息图加入详情图列表首位（不参与下载，已存在本地）
         if (packImagePath != null) {
@@ -333,6 +366,7 @@ public class ProductScraper {
         }
 
         log.info("[步骤] 下载 SKU 图...");
+        logProgress("  [步骤] 下载 SKU 图...");
         List<String> skuImageUrls = new ArrayList<>();
         for (SkuData sku : skuList) {
             if (sku.getImageUrl() != null && !sku.getImageUrl().isEmpty()) {
@@ -347,29 +381,37 @@ public class ProductScraper {
             skuList.get(i).setImageUrl(skuImagePaths.get(i));
         }
         log.info("[成功] SKU 图下载完成");
+        logProgress("  ✅ SKU图下载完成");
 
         // 下载视频
         if (videoUrl != null && !videoUrl.isEmpty()) {
             log.info("[步骤] 下载视频...");
+            logProgress("  [步骤] 下载视频...");
             String localVideoPath = downloadVideo(product, videoUrl);
             if (localVideoPath != null) {
                 product.setVideoUrl(localVideoPath);
             }
             log.info("[成功] 视频下载完成");
+            logProgress("  ✅ 视频下载完成");
         }
 
         // 生成价格表 CSV
         log.info("[步骤] 生成价格表 CSV...");
+        logProgress("  [步骤] 生成价格表 CSV...");
         generatePriceCsv(product);
         log.info("[成功] 价格表 CSV 已生成");
+        logProgress("  ✅ 价格表 CSV 已生成");
 
         // 保存完整商品数据为 JSON（供前端加载）
         log.info("[步骤] 保存完整商品数据 JSON...");
+        logProgress("  [步骤] 保存商品数据 JSON...");
         saveProductJson(product, skuList);
         log.info("[成功] 完整商品数据 JSON 已保存");
+        logProgress("  ✅ 商品数据 JSON 已保存");
 
         log.info("商品采集完成: {} - {} 张主图, {} 张详情图, {} 个SKU",
                 title, mainImages.size(), detailImages.size(), skuList.size());
+        logProgress(String.format("  ✅ 采集完成: %s - %d张主图, %d个SKU", title, mainImages.size(), skuList.size()));
 
         // 校验：主图和详情图至少各有一张
         if (mainImages.isEmpty()) {
@@ -1356,8 +1398,13 @@ public class ProductScraper {
         String categoryFolder = LinkFileReader.getCategoryFolderName(categoryPath);
         String safeTitle = sanitizeFileName(title);
         String productDir = linkFile + File.separator + categoryFolder + File.separator + safeTitle;
-
         Path path = Paths.get(productDir);
+
+        // 目录已存在则直接覆盖（相同标题的商品重新采集时覆盖更新）
+        if (Files.exists(path)) {
+            log.info("目录已存在，直接覆盖: {}", productDir);
+        }
+
         try {
             Files.createDirectories(path.resolve("主图"));
             Files.createDirectories(path.resolve("详情图"));
@@ -1396,6 +1443,7 @@ public class ProductScraper {
                         if (data != null && data.length > 0) {
                             Files.write(target, data);
                             downloaded.incrementAndGet();
+                            logProgress(String.format("  [下载] %s: %s (%d/%d)", type, filename, downloaded.get(), total));
                             synchronized (localPaths) {
                                 // Ensure we have enough slots
                                 while (localPaths.size() <= idx) localPaths.add(null);
