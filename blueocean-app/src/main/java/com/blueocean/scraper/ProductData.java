@@ -13,6 +13,7 @@ public class ProductData {
     private String layout;
     private List<String> mainImages = new ArrayList<>();
     private List<String> detailImages = new ArrayList<>();
+    private List<String> skuImages = new ArrayList<>();
     private List<SkuData> skus = new ArrayList<>();
     private Map<String, String> attributes = new LinkedHashMap<>();
     private List<Map<String, String>> packInfo = new ArrayList<>();
@@ -33,6 +34,8 @@ public class ProductData {
     public void setMainImages(List<String> mainImages) { this.mainImages = mainImages; }
     public List<String> getDetailImages() { return detailImages; }
     public void setDetailImages(List<String> detailImages) { this.detailImages = detailImages; }
+    public List<String> getSkuImages() { return skuImages; }
+    public void setSkuImages(List<String> skuImages) { this.skuImages = skuImages; }
     public List<SkuData> getSkus() { return skus; }
     public void setSkus(List<SkuData> skus) { this.skus = skus; }
     public Map<String, String> getAttributes() { return attributes; }

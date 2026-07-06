@@ -30,6 +30,8 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 
+import static com.blueocean.sku.SkuFillController.SKU_EXTRACTOR;
+
 /**
  * SKU 自动填充服务
  * 流程：连千牛页面获取SKU属性名 → 读本地CSV → AI分析生成single/multi结构 → 根据AI结果判断模式
@@ -233,7 +235,7 @@ public class SkuFillService {
     /**
      * 填写 SKU 选项值到千牛页面
      */
-    public Map<String, Object> fillSkuToPage(String productDir,List<String> qianniuSkuProps ) {
+    public Map<String, Object> fillSkuToPage(String productDir,List<String> qianniuSkuProps) {
         Map<String, Object> result = new LinkedHashMap<>();
         try {
             // 1. 读取sku-ai-result.json的sku信息
@@ -267,16 +269,16 @@ public class SkuFillService {
                 page.bringToFront();
 
                 // 判断要用哪一个模式
-                SkuAttrExtractor extractor =  SkuAttrExtractorFactory.findMatching(page);
+                SKU_EXTRACTOR  =  SkuAttrExtractorFactory.findMatching(page);
 
-                if (extractor == null) {
+                if (SKU_EXTRACTOR == null) {
                     result.put("success", false);
                     result.put("error", "重试仍未匹配到页面提取策略");
                     return result;
                 }
 
-                if (extractor instanceof PresetAttrExtractor) {
-                    PresetAttrExtractor presetExtractor = (PresetAttrExtractor) extractor;
+                if (SKU_EXTRACTOR instanceof PresetAttrExtractor) {
+                    PresetAttrExtractor presetExtractor = (PresetAttrExtractor) SKU_EXTRACTOR;
 
                     // 从 multi.levels 提取需要填写的属性
                     JSONObject multi = aiResult.getJSONObject("multi");
@@ -300,11 +302,11 @@ public class SkuFillService {
                             log.info("SKU 填写完成(预置属性): {}", attrOptions.keySet());
                         }
                     }
-                } else if (extractor instanceof com.blueocean.sku.extractor.CreateSpecAttrExtractor) {
-                    CreateSpecAttrExtractor createSpecExtractor = (CreateSpecAttrExtractor) extractor;
+                } else if (SKU_EXTRACTOR instanceof com.blueocean.sku.extractor.CreateSpecAttrExtractor) {
+                    CreateSpecAttrExtractor createSpecExtractor = (CreateSpecAttrExtractor) SKU_EXTRACTOR;
 
                     String jsonPathStr = jsonPath.toAbsolutePath().toString();
-                    createSpecExtractor.fillSku(page, jsonPathStr,qianniuSkuProps);
+                    createSpecExtractor.fillSku(page, jsonPathStr,qianniuSkuProps,mode);
                     log.info("SKU 填写完成(创建规格模式)");
                 } else {
                     result.put("success", false);
@@ -378,9 +380,7 @@ public class SkuFillService {
                 page.bringToFront();
 
                 // 走通用方法，不判断页面模式
-                com.blueocean.sku.extractor.SkuAttrExtractor extractor =
-                        com.blueocean.sku.extractor.SkuAttrExtractorFactory.findMatching(page);
-                extractor.fillPriceAndStock(page, jsonPath.toAbsolutePath().toString());
+                SKU_EXTRACTOR.fillPriceAndStock(page, jsonPath.toAbsolutePath().toString());
 
                 // 调试：验证填写结果
                 Object rowsData = page.evaluate("""
@@ -552,13 +552,11 @@ public class SkuFillService {
         prompt.append("SKU 名称格式为: 属性1-属性2-属性3（如：白色-S、黑色-M），也可能是独立商品名（如小绿龙、大警车等）\n\n");
 
         prompt.append("【任务要求】\n");
-        prompt.append("1. **判断结构类型**：如果 SKU 名称是独立的商品名（不同款式/品类），无法拆分为可组合的属性维度，则只输出 single 结构，multi 留空\n");
-        prompt.append("2. **选择属性**：从千牛提供的可选属性中，选出和本地 CSV 数据对应的属性（可以不全选，比如 CSV 只有2层结构，就选2个属性）\n");
-        prompt.append("3. **排列顺序**：决定选中属性的层级顺序（排在前面的是外层）\n");
-        prompt.append("4. **同义词匹配**：本地 CSV 的叫法和千牛属性名称可能不同，例如 CSV 可能叫「颜色」「规格」，而千牛叫「颜色分类」「款式」，请你根据语义智能匹配对应关系\n");
-        prompt.append("5. **输出结构**：\n");
-        prompt.append("   - **single 结构**：保持原有 ").append(skuData.size()).append(" 个 SKU，每个 SKU 名称作为整体，必须输出\n");
-        prompt.append("   - **multi 结构**：仅当 SKU 确实由可组合的属性（如颜色+尺码）构成时才输出，否则 levels 和 skus 留空数组 []\n");
+        prompt.append("1. **single 必须始终填充**：不管 SKU 是可拆分的还是独立的，").append(skuData.size()).append(" 个 SKU 全部原样填入 single 结构，这是永远必须做的\n");
+        prompt.append("2. **multi 额外拆分**：在 single 的基础上，如果 SKU 确实由可组合的属性维度构成（如颜色+尺码），才额外输出 multi 结构。如果 SKU 是独立商品名无法拆分，则 multi 的 levels 和 skus 留空数组 []\n");
+        prompt.append("3. **选择属性**：从千牛提供的可选属性中，选出和本地 CSV 数据对应的属性（可以不全选，比如 CSV 只有2层结构，就选2个属性）\n");
+        prompt.append("4. **排列顺序**：决定选中属性的层级顺序（排在前面的是外层）\n");
+        prompt.append("5. **同义词匹配**：本地 CSV 的叫法和千牛属性名称可能不同，例如 CSV 可能叫「颜色」「规格」，而千牛叫「颜色分类」「款式」，请你根据语义智能匹配对应关系\n");
         prompt.append("6. 本地已有的 SKU，从 CSV 中取价格和库存填入\n");
         prompt.append("7. multi 结构中缺失的组合，price 和 stock 留空字符串 \"\"\n\n");
 

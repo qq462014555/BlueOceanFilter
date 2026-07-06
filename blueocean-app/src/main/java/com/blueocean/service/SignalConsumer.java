@@ -85,7 +85,9 @@ public class SignalConsumer {
     }
 
     private void fillFields(JSONArray fields, String productId) {
+
         try (Playwright playwright = Playwright.create()) {
+
             Browser browser = playwright.chromium().connectOverCDP("http://127.0.0.1:9223");
             BrowserContext context = browser.contexts().get(0);
 
@@ -120,15 +122,88 @@ public class SignalConsumer {
                     }
 
                     if ("select".equals(type)) {
-                        targetItem.locator(".next-input-control").first().click();
-                        sleep(500);
-                        Locator option = targetPage.locator(".options-item:has-text('" + value + "')").first();
-                        if (option.count() > 0) {
-                            option.click();
-                            sleep(500);
-                            log.info("✅ {} = {}", label, value);
-                        } else {
-                            log.warn("❌ {} 找不到选项: {}", label, value);
+                        // 带重试的 select 填写：最多重试 3 次，解决搜索框未聚焦/未渲染问题
+                        boolean selectDone = false;
+                        for (int retry = 0; retry < 3 && !selectDone; retry++) {
+                            if (retry > 0) {
+                                log.info("🔄 第 {} 次重试 select: {}", retry + 1, label);
+                                sleep(1000);
+                            }
+
+                            // 点击打开下拉框
+                            targetItem.locator(".next-input-control").first().click();
+                            sleep(1000);
+
+                            // 找搜索框（多种选择器兜底）
+                            Locator searchInput = targetPage.locator(".sell-o-select-options input").first();
+                            if (searchInput.count() == 0) {
+                                searchInput = targetPage.locator(".sell-o-select-options .options-search input").first();
+                            }
+                            if (searchInput.count() == 0) {
+                                searchInput = targetPage.locator(".sell-o-select-options span input").first();
+                            }
+
+                            if (searchInput.count() > 0) {
+                                try {
+                                    searchInput.click();
+                                    sleep(300);
+                                    searchInput.fill(value);
+                                    sleep(1500);
+                                } catch (Exception e) {
+                                    log.warn("❌ {} 输入值失败: {}", label, e.getMessage());
+                                    continue;
+                                }
+
+                                // 查找选项并点击
+                                Locator option = targetPage.locator(".options-item:has-text('" + value + "')").first();
+                                if (option.count() > 0) {
+                                    try {
+                                        option.click();
+                                        sleep(500);
+                                        // 验证：下拉框关闭了说明选中成功
+                                        boolean selected = targetPage.locator(".sell-o-select-options").count() == 0;
+                                        if (selected) {
+                                            log.info("✅ {} = {} (已选中)", label, value);
+                                            selectDone = true;
+                                        } else {
+                                            log.warn("❌ {} 点击后下拉未关闭，可能未选中", label);
+                                        }
+                                    } catch (Exception e) {
+                                        log.warn("❌ {} 点击选项失败: {}", label, e.getMessage());
+                                    }
+                                } else {
+                                    log.warn("❌ {} 找不到选项: {}", label, value);
+                                    // 品牌特殊处理
+                                    if (label.contains("品牌")) {
+                                        try {
+                                            searchInput.click();
+                                            sleep(200);
+                                            searchInput.fill("无品牌");
+                                            sleep(1500);
+                                        } catch (Exception e) {
+                                            log.warn("❌ {} 输入'无品牌'失败: {}", label, e.getMessage());
+                                        }
+                                        Locator noBrand = targetPage.locator(".options-item:has-text('无品牌')").first();
+                                        if (noBrand.count() > 0) {
+                                            try {
+                                                noBrand.click();
+                                                sleep(500);
+                                                log.info("✅ {} = 无品牌 (品牌fallback)", label);
+                                                selectDone = true;
+                                            } catch (Exception e) {
+                                                log.warn("❌ {} 点击'无品牌'失败: {}", label, e.getMessage());
+                                            }
+                                        } else {
+                                            log.warn("❌ {} 无品牌也找不到", label);
+                                        }
+                                    }
+                                }
+                            } else {
+                                log.warn("❌ {} 未找到搜索输入框 (第{}次)", label, retry + 1);
+                            }
+                        }
+                        if (!selectDone) {
+                            log.warn("❌ {} select 填写失败（已重试3次）", label);
                         }
                     } else if ("combobox".equals(type) || "input".equals(type) || "measurement".equals(type)) {
                         Locator inputEl = targetItem.locator("input").first();

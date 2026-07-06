@@ -380,6 +380,7 @@ public class ProductScraper {
         for (int i = 0; i < skuList.size() && i < skuImagePaths.size(); i++) {
             skuList.get(i).setImageUrl(skuImagePaths.get(i));
         }
+        product.setSkuImages(skuImagePaths);
         log.info("[成功] SKU 图下载完成");
         logProgress("  ✅ SKU图下载完成");
 
@@ -845,6 +846,12 @@ public class ProductScraper {
             } catch (Exception e) {
                 log.debug("主图规则3(JS降级)失败: {}", e.getMessage());
             }
+        }
+
+        // 只保留前 5 张主图
+        if (images.size() > 5) {
+            images = new ArrayList<>(images.subList(0, 5));
+            log.info("主图超过5张，截取前5张");
         }
 
         return images;
@@ -1542,6 +1549,7 @@ public class ProductScraper {
             data.put("layout", product.getLayout());
             data.put("mainImages", product.getMainImages());
             data.put("detailImages", product.getDetailImages());
+            data.put("skuImages", product.getSkuImages());
             data.put("attributes", product.getAttributes());
             data.put("packInfo", product.getPackInfo());
             data.put("videoUrl", product.getVideoUrl());

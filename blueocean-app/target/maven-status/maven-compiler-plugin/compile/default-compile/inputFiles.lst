@@ -5,6 +5,7 @@ G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\scraper\ProductData
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\entity\TrendKeyword.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\scraper\ScraperConfig.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\scraper\LinkFileReader.java
+G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\controller\AiImageController.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\controller\FileManagerController.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\scraper\LinkEntry.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\service\ImageFileService.java
@@ -58,3 +59,4 @@ G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\config\AppPropertie
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\scraper\MerchantAttributeExtractor.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\service\AttributeMappingService.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\sku\SkuFillController.java
+G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\service\OpenRouterService.java

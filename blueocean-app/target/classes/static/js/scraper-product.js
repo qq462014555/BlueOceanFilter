@@ -49,7 +49,9 @@ function buildProductCardHtml(product, isFromScrape) {
 
     // Main images — always 5 slots
     html += '<div class="section" data-product-dir="' + escapeAttr(product.productDir || '') + '">';
-    html += '<div class="section-title">主图 <span class="badge">' + (product.mainImages ? product.mainImages.length : 0) + '/5</span></div>';
+    html += '<div class="section-title">主图 <span class="badge">' + (product.mainImages ? product.mainImages.length : 0) + '/5</span>';
+    html += '<button class="btn-ai-redraw" onclick="openAiRedrawModal(\'' + escapeJs(product.productDir || '') + '\')">🎨 AI重绘</button>';
+    html += '</div>';
     html += '<div class="image-grid">';
     var mainImgCount = product.mainImages ? product.mainImages.length : 0;
     for (var mi = 0; mi < 5; mi++) {

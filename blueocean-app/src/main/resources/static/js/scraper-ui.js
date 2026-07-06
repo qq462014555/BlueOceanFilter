@@ -36,9 +36,479 @@ function showError(msg) {
 
 function hideError() { document.getElementById('errorSection').classList.add('hidden'); }
 
-function showModal(src) {
-    document.getElementById('modalImage').src = src;
-    document.getElementById('imageModal').classList.add('active');
+// ========== 图片画廊 ==========
+let _galleryImages = [];
+let _galleryIndex = 0;
+
+function showModal(src, gallery, index) {
+    const modal = document.getElementById('imageModal');
+    const img = document.getElementById('modalImage');
+    const prev = document.getElementById('modalPrev');
+    const next = document.getElementById('modalNext');
+    const counter = document.getElementById('modalCounter');
+    if (!modal) return;
+    img.src = src;
+    if (gallery && gallery.length > 1) {
+        _galleryImages = gallery;
+        _galleryIndex = index !== undefined ? index : 0;
+        if (prev) prev.style.display = _galleryIndex > 0 ? 'block' : 'none';
+        if (next) next.style.display = _galleryIndex < _galleryImages.length - 1 ? 'block' : 'none';
+        if (counter) counter.textContent = (_galleryIndex + 1) + ' / ' + _galleryImages.length;
+    } else {
+        _galleryImages = [];
+        if (prev) prev.style.display = 'none';
+        if (next) next.style.display = 'none';
+        if (counter) counter.textContent = '';
+    }
+    modal.classList.add('active');
+}
+
+function closeModal() {
+    const modal = document.getElementById('imageModal');
+    if (modal) modal.classList.remove('active');
+}
+
+function galleryPrev() {
+    if (_galleryIndex <= 0 || _galleryImages.length === 0) return;
+    _galleryIndex--;
+    document.getElementById('modalImage').src = _galleryImages[_galleryIndex];
+    const prev = document.getElementById('modalPrev');
+    const next = document.getElementById('modalNext');
+    const counter = document.getElementById('modalCounter');
+    if (prev) prev.style.display = _galleryIndex > 0 ? 'block' : 'none';
+    if (next) next.style.display = 'block';
+    if (counter) counter.textContent = (_galleryIndex + 1) + ' / ' + _galleryImages.length;
+}
+
+function galleryNext() {
+    if (_galleryIndex >= _galleryImages.length - 1 || _galleryImages.length === 0) return;
+    _galleryIndex++;
+    document.getElementById('modalImage').src = _galleryImages[_galleryIndex];
+    const prev = document.getElementById('modalPrev');
+    const next = document.getElementById('modalNext');
+    const counter = document.getElementById('modalCounter');
+    if (next) next.style.display = _galleryIndex < _galleryImages.length - 1 ? 'block' : 'none';
+    if (prev) prev.style.display = 'block';
+    if (counter) counter.textContent = (_galleryIndex + 1) + ' / ' + _galleryImages.length;
+}
+
+// 键盘切换
+document.addEventListener('keydown', function(e) {
+    const modal = document.getElementById('imageModal');
+    if (!modal || !modal.classList.contains('active')) return;
+    if (e.key === 'ArrowLeft') galleryPrev();
+    else if (e.key === 'ArrowRight') galleryNext();
+    else if (e.key === 'Escape') closeModal();
+});
+
+// 复制图片到剪贴板（1440×1440）
+function copyAiImage(imgSrc) {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = function() {
+        const canvas = document.createElement('canvas');
+        canvas.width = 1440; canvas.height = 1440;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, 1440, 1440);
+        const scale = Math.min(1440 / img.width, 1440 / img.height);
+        const x = (1440 - img.width * scale) / 2;
+        const y = (1440 - img.height * scale) / 2;
+        ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
+        canvas.toBlob(function(blob) {
+            navigator.clipboard.write([new ClipboardItem({[blob.type]: blob})])
+                .then(() => showToast('✅ 已复制 1440×1440 图片', 'success'))
+                .catch(() => showToast('❌ 复制失败', 'error'));
+        }, 'image/png');
+    };
+    img.onerror = () => showToast('❌ 加载图片失败', 'error');
+    img.src = imgSrc;
+}
+
+// ========== AI 主图重绘弹窗 ==========
+
+let _aiRedrawProductDir = '';
+let _aiRedrawPlatform = 'taobao';
+let _aiRedrawPrompts = {};
+let _aiRedrawAnalysis = {};
+let _aiReplaceImages = [];
+const _aiPlatformNames = { taobao: '淘宝', douyin: '抖音', shopee: '虾皮' };
+
+function openAiRedrawModal(productDir) {
+    _aiRedrawProductDir = productDir;
+    document.getElementById('aiRedrawModal').classList.add('active');
+    loadAiPrompts();
+    // 切换到自定义生成主图标签
+    const genTab = document.querySelector('#aiTabBar .ai-tab[data-tab="generate"]');
+    if (genTab) genTab.click();
+    // 自动开始 AI 分析
+    autoGeneratePrompts(productDir);
+}
+
+function closeAiRedrawModal() {
+    document.getElementById('aiRedrawModal').classList.remove('active');
+}
+
+async function loadAiPrompts() {
+    try {
+        const resp = await fetch('/api/ai-image/prompts');
+        if (resp.ok) {
+            const data = await resp.json();
+            _aiRedrawPrompts = data.platforms || {};
+            renderAiModelSelect(data.models || []);
+        }
+    } catch (e) {
+        console.error('加载提示词失败', e);
+    }
+}
+
+function renderAiModelSelect(models) {
+    const sel = document.getElementById('aiModelSelect');
+    if (!sel) return;
+    sel.innerHTML = '';
+    if (models.length > 0) {
+        models.forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m.id; opt.textContent = m.name;
+            sel.appendChild(opt);
+        });
+    } else {
+        sel.innerHTML = '<option value="black-forest-labs/FLUX.1-schnell">FLUX.1 Schnell</option>';
+    }
+}
+
+function renderAiPromptGrid() {
+    const grid = document.getElementById('aiPromptGrid');
+    if (!grid) return;
+    const prompts = _aiRedrawPrompts[_aiRedrawPlatform] || {};
+    let html = '';
+    // 全选按钮
+    html += '<div style="grid-column:1/-1;margin-bottom:4px;display:flex;justify-content:flex-end;">';
+    html += '<label style="font-size:12px;color:#667eea;cursor:pointer;"><input type="checkbox" id="selectAllPrompt" checked onchange="toggleAllPrompts(this)"> 一键全选</label>';
+    html += '</div>';
+    for (let i = 1; i <= 5; i++) {
+        const key = '图' + i;
+        const val = prompts[key] || '';
+        html += '<div class="prompt-item">';
+        html += '<div class="prompt-item-header">';
+        html += '<span class="img-label">' + (_aiPlatformNames[_aiRedrawPlatform] || _aiRedrawPlatform) + ' - ' + key + '</span>';
+        html += '<label class="prompt-check"><input type="checkbox" data-check-key="' + key + '" checked> 是否生成图</label>';
+        html += '</div>';
+        html += '<textarea data-key="' + key + '" placeholder="输入生成风格提示词...">' + escapeHtml(val) + '</textarea>';
+        html += '<button class="btn-optimize-prompt" data-key="' + key + '" onclick="optimizePrompt(this)">🧠 智能优化提示词</button>';
+        html += '</div>';
+    }
+    grid.innerHTML = html;
+}
+
+function toggleAllPrompts(cb) {
+    document.querySelectorAll('#aiPromptGrid input[data-check-key]').forEach(chk => {
+        chk.checked = cb.checked;
+    });
+}
+
+async function optimizePrompt(btn) {
+    if (_aiGenTimer) { showToast('⚠️ AI 商品分析进行中，请等待完成', 'error'); return; }
+    const key = btn.dataset.key;
+    const textarea = btn.parentElement.querySelector('textarea');
+    const prompt = textarea.value.trim();
+    if (!prompt) { showToast('⚠️ 提示词为空', 'error'); return; }
+    const analysis = _aiRedrawAnalysis || {};
+    if (Object.keys(analysis).length === 0) { showToast('⚠️ 缺少商品分析', 'error'); return; }
+    btn.disabled = true;
+    btn.textContent = '⏳ 优化中...';
+    try {
+        const resp = await fetch('/api/ai-image/optimize-prompt', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt, analysis })
+        });
+        if (resp.ok) {
+            const data = await resp.json();
+            if (data.success && data.optimizedPrompt) {
+                textarea.value = data.optimizedPrompt;
+                showToast('✅ 已优化', 'success');
+            } else showToast('❌ 优化失败', 'error');
+        }
+    } catch (e) {
+        showToast('❌ 异常: ' + e.message, 'error');
+    }
+    btn.disabled = false;
+    btn.textContent = '🧠 智能优化提示词';
+}
+
+// AI 分析
+let _aiGenTimer = null;
+let _aiGenSeconds = 0;
+
+function showAiLoading() {
+    stopAiLoading(); // 清除旧计时器
+    const section = document.getElementById('aiAnalysisSection');
+    const grid = document.getElementById('aiAnalysisGrid');
+    if (!section || !grid) return;
+    section.style.display = 'block';
+    _aiGenSeconds = 0;
+    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:20px;color:#999;">' +
+        '<div style="font-size:28px;margin-bottom:8px;">⏳</div>' +
+        '<div style="font-size:13px;">AI 正在分析商品... <span id="aiAnalysisTimer">0s</span></div></div>';
+    _aiGenTimer = setInterval(() => {
+        _aiGenSeconds++;
+        const t = document.getElementById('aiAnalysisTimer');
+        if (t) t.textContent = _aiGenSeconds + 's';
+    }, 1000);
+}
+
+function stopAiLoading() {
+    if (_aiGenTimer) { clearInterval(_aiGenTimer); _aiGenTimer = null; }
+}
+
+async function autoGeneratePrompts(productDir, forceNew) {
+    if (!productDir) return;
+    showAiLoading();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 90000);
+    try {
+        const resp = await fetch('/api/ai-image/auto-generate-prompts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ productDir, platform: _aiRedrawPlatform, forceNew }),
+            signal: controller.signal
+        });
+        clearTimeout(timeout);
+        if (resp.ok) {
+            const data = await resp.json();
+            if (data.success && data.prompts) {
+                // 保存分析维度
+                const analysisKeys = ['品类','材质','卖点','目标人群','使用场景','视觉特征'];
+                const analysis = {};
+                analysisKeys.forEach(k => {
+                    if (data.prompts[k]) analysis[k] = data.prompts[k];
+                });
+                _aiRedrawAnalysis = analysis;
+                renderAiAnalysis(analysis);
+                // 保存提示词
+                if (!_aiRedrawPrompts[_aiRedrawPlatform]) _aiRedrawPrompts[_aiRedrawPlatform] = {};
+                for (let i = 1; i <= 5; i++) {
+                    const key = '图' + i;
+                    if (data.prompts[key]) _aiRedrawPrompts[_aiRedrawPlatform][key] = data.prompts[key];
+                }
+                renderAiPromptGrid();
+                loadWhiteBgImages(productDir);
+            }
+        }
+    } catch (e) {
+        console.error('AI 分析失败', e);
+        const ag = document.getElementById('aiAnalysisGrid');
+        if (ag) ag.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:20px;color:#999;font-size:13px;">⚠️ AI 分析失败: ' + (e.name === 'AbortError' ? '请求超时' : e.message) + '</div>';
+    } finally {
+        clearTimeout(timeout);
+        stopAiLoading();
+        renderAiPromptGrid();
+        // 如果分析网格还是加载内容，替换掉
+        const ag = document.getElementById('aiAnalysisGrid');
+        if (ag && ag.textContent.includes('正在分析')) {
+            if (Object.keys(_aiRedrawAnalysis).length > 0) {
+                renderAiAnalysis(_aiRedrawAnalysis);
+            } else {
+                ag.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:20px;color:#ccc;font-size:13px;">分析完成，暂无数据</div>';
+            }
+        }
+    }
+}
+
+// 白底图
+async function loadWhiteBgImages(productDir) {
+    if (!productDir) return;
+    try {
+        const resp = await fetch('/api/ai-image/generate-white-bg', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ productDir })
+        });
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (!data.success || !data.images || data.images.length === 0) return;
+        const analysisSection = document.getElementById('aiAnalysisSection');
+        if (!analysisSection) return;
+        const old = analysisSection.querySelector('.ai-whitebg-grid');
+        if (old) old.remove();
+        // 构建画廊
+        const galleryUrls = data.images.map(img => '/api/ai-image/image-file?path=' + encodeURIComponent(img.path));
+        let html = '<div class="ai-whitebg-grid" style="margin-top:12px;padding-top:12px;border-top:1px solid #d6e4ff;">';
+        html += '<div style="font-size:12px;font-weight:600;color:#1d39c4;margin-bottom:8px;">⬜ 白底图' + (data.fromCache ? ' (已存在)' : ' (AI 生成)') + '</div>';
+        html += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
+        data.images.forEach((img, idx) => {
+            const imgUrl = galleryUrls[idx];
+            html += '<div style="text-align:center;"><img src="' + imgUrl + '" style="width:100px;height:100px;object-fit:cover;border-radius:6px;border:1px solid #e0e0e0;cursor:pointer;" onclick="showModal(\'' + imgUrl + '\',' + JSON.stringify(galleryUrls).replace(/"/g,"'") + ',' + idx + ')">';
+            html += '<div style="font-size:10px;color:#999;margin-top:2px;">' + img.name + '</div></div>';
+        });
+        html += '</div></div>';
+        analysisSection.insertAdjacentHTML('afterend', html);
+    } catch (e) {
+        console.error('加载白底图失败', e);
+    }
+}
+
+function renderAiAnalysis(analysis) {
+    const section = document.getElementById('aiAnalysisSection');
+    const grid = document.getElementById('aiAnalysisGrid');
+    if (!section || !grid) return;
+    const keys = Object.keys(analysis);
+    if (keys.length === 0) return;
+    let html = '';
+    for (const k of keys) {
+        html += '<div class="ai-analysis-item"><div class="label">' + k + '</div><div>' + escapeHtml(analysis[k]) + '</div></div>';
+    }
+    grid.innerHTML = html;
+    section.style.display = 'block';
+}
+
+async function refreshAiAnalysis() {
+    if (!_aiRedrawProductDir) return;
+    autoGeneratePrompts(_aiRedrawProductDir, true);
+}
+
+// 生成图片
+async function generateAiImages() {
+    const btn = document.getElementById('aiGenerateBtn');
+    const status = document.getElementById('aiGenerateStatus');
+    const model = document.getElementById('aiModelSelect').value;
+    const prompts = {};
+    document.querySelectorAll('#aiPromptGrid textarea').forEach(ta => {
+        prompts[ta.dataset.key] = ta.value.trim();
+    });
+    const keys = Object.keys(prompts).filter(k => prompts[k]);
+    if (keys.length === 0) {
+        status.textContent = '⚠️ 请填写提示词';
+        return;
+    }
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> 生成中...';
+    status.textContent = '正在生成...';
+    try {
+        const resp = await fetch('/api/ai-image/generate-all', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                model, prompt: keys.map(k => k + '：' + prompts[k]).join('\n'),
+                allPrompts: prompts, n: keys.length,
+                productDir: _aiRedrawProductDir, platform: _aiRedrawPlatform
+            })
+        });
+        if (resp.ok) {
+            const data = await resp.json();
+            status.textContent = '✅ ' + (data.succeeded || 0) + '/' + (data.total || 0) + ' 成功';
+        } else {
+            status.textContent = '❌ 生成失败';
+        }
+    } catch (e) {
+        status.textContent = '❌ ' + e.message;
+    }
+    btn.disabled = false;
+    btn.textContent = '🚀 生成全部 5 张图';
+}
+
+// 替换图函数
+function onReplaceFilesSelected(event) {
+    const files = event.target.files;
+    for (const file of files) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            _aiReplaceImages.push(e.target.result);
+            renderReplaceGrid();
+        };
+        reader.readAsDataURL(file);
+    }
+    event.target.value = '';
+}
+
+function renderReplaceGrid() {
+    const grid = document.getElementById('aiReplaceGrid');
+    if (!grid) return;
+    let html = '';
+    _aiReplaceImages.forEach((img, idx) => {
+        const src = img.startsWith('data:') ? img : '/api/ai-image/image-file?path=' + encodeURIComponent(img);
+        html += '<div class="img-item" data-filepath="">';
+        html += '<div class="img-wrap"><img draggable="true" src="' + src + '" onclick="showModal(this.src)">';
+        html += '<div class="img-label">' + (idx + 1) + '</div></div>';
+        html += '<div class="img-actions-bar"><button class="action-btn btn-delete" onclick="removeReplaceImage(' + idx + ')">删除</button></div></div>';
+    });
+    html += '<div class="img-item"><div class="img-placeholder" onclick="document.getElementById(\'aiReplaceFileInput\').click()">';
+    html += '<div class="placeholder-icon">+</div><div class="placeholder-text">添加图</div></div></div>';
+    grid.innerHTML = html;
+}
+
+function removeReplaceImage(idx) {
+    _aiReplaceImages.splice(idx, 1);
+    renderReplaceGrid();
+}
+
+async function generateReplaceImages() {
+    if (_aiReplaceImages.length === 0) { showToast('⚠️ 请先添加图片', 'error'); return; }
+    if (!_aiRedrawProductDir) { showToast('⚠️ 缺少商品目录', 'error'); return; }
+    const btn = document.getElementById('aiReplaceBtn');
+    const status = document.getElementById('aiReplaceStatus');
+    btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> 生成中...';
+    status.textContent = '正在生成...';
+    try {
+        const resp = await fetch('/api/ai-image/replace', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ productDir: _aiRedrawProductDir, images: _aiReplaceImages })
+        });
+        if (resp.ok) {
+            const data = await resp.json();
+            status.textContent = '✅ ' + (data.succeeded || 0) + ' 成功, ❌ ' + (data.failed || 0) + ' 失败';
+            // 显示预览
+            if (data.results && data.results.length > 0) {
+                const old = document.querySelector('.ai-replace-previews');
+                if (old) old.remove();
+                const modalBody = document.querySelector('.ai-modal-body');
+                if (!modalBody) return;
+                const div = document.createElement('div');
+                div.className = 'ai-replace-previews';
+                div.style.cssText = 'border-top:1px solid #eee;padding-top:12px;margin-top:12px;';
+                let ph = '<div style="font-size:13px;font-weight:600;margin-bottom:8px;">🖼️ 替换结果</div><div style="display:flex;gap:10px;flex-wrap:wrap;">';
+                data.results.forEach(r => {
+                    const u = '/api/ai-image/image-file?path=' + encodeURIComponent(r.path);
+                    ph += '<div style="text-align:center;"><img src="' + u + '" style="width:100px;height:100px;object-fit:cover;border-radius:6px;border:1px solid #e0e0e0;cursor:pointer;" onclick="showModal(this.src)"><div style="font-size:10px;color:#999;margin-top:2px;">' + r.key + '</div></div>';
+                });
+                ph += '</div>';
+                div.innerHTML = ph;
+                modalBody.appendChild(div);
+            }
+        } else {
+            status.textContent = '❌ 请求失败';
+        }
+    } catch (e) {
+        status.textContent = '❌ ' + e.message;
+    }
+    btn.disabled = false; btn.textContent = '🚀 生成替换图';
+}
+
+// 标签切换
+document.addEventListener('click', function(e) {
+    const tabBtn = e.target.closest('#aiTabBar .ai-tab');
+    if (!tabBtn) return;
+    const tab = tabBtn.dataset.tab;
+    document.querySelectorAll('#aiTabBar .ai-tab').forEach(b => b.classList.remove('active'));
+    tabBtn.classList.add('active');
+    document.querySelectorAll('.ai-tab-content').forEach(el => el.style.display = 'none');
+    const target = document.getElementById('aiTab' + tab.charAt(0).toUpperCase() + tab.slice(1));
+    if (target) target.style.display = 'block';
+});
+
+// 平台切换
+document.addEventListener('click', function(e) {
+    const platBtn = e.target.closest('#aiPlatformSelect button');
+    if (!platBtn) return;
+    document.querySelectorAll('#aiPlatformSelect button').forEach(b => b.classList.remove('active'));
+    platBtn.classList.add('active');
+    _aiRedrawPlatform = platBtn.dataset.platform;
+    renderAiPromptGrid();
+});
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 async function loadTodayProducts() {

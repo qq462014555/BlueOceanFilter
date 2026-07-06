@@ -1,0 +1,5 @@
+com\blueocean\controller\AiImageController.class
+com\blueocean\service\AttributeMappingService.class
+com\blueocean\service\OpenRouterService.class
+com\blueocean\service\DashScopeClient.class
+com\blueocean\controller\FilterController.class

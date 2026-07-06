@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 主图提示词管理</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; padding: 24px; border-radius: 12px; margin-bottom: 24px; }
+        .header h1 { font-size: 24px; margin-bottom: 8px; }
+        .header p { opacity: 0.9; font-size: 14px; }
+        .nav-bar { display: flex; gap: 12px; justify-content: center; margin-bottom: 24px; flex-wrap: wrap; }
+        .nav-bar a { padding: 10px 24px; background: #fff; color: #1890ff; border: 2px solid #1890ff; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 600; transition: all 0.2s; }
+        .nav-bar a:hover { background: #1890ff; color: #fff; }
+        .nav-bar a.active { background: #1890ff; color: #fff; }
+
+        .platform-tabs { display: flex; gap: 8px; margin-bottom: 20px; }
+        .platform-tab { padding: 10px 24px; border: 2px solid #e0e0e0; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; background: #fff; transition: all 0.2s; }
+        .platform-tab:hover { border-color: #667eea; }
+        .platform-tab.active { background: #667eea; color: #fff; border-color: #667eea; }
+
+        .prompt-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+        .prompt-card { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+        .prompt-card .label { font-size: 14px; font-weight: 600; margin-bottom: 8px; color: #667eea; }
+        .prompt-card textarea { width: 100%; height: 80px; padding: 10px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 13px; resize: vertical; outline: none; font-family: inherit; }
+        .prompt-card textarea:focus { border-color: #667eea; }
+
+        .btn { padding: 12px 32px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+        .btn-primary { background: #667eea; color: #fff; }
+        .btn-primary:hover { background: #5a6fd6; }
+        .btn-primary:disabled { background: #ccc; cursor: not-allowed; }
+        .btn-success { background: #52c41a; color: #fff; }
+        .btn-success:hover { background: #45b018; }
+
+        .toast { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 2000; padding: 16px 28px; border-radius: 12px; font-size: 14px; font-weight: 500; box-shadow: 0 8px 30px rgba(0,0,0,0.25); pointer-events: none; opacity: 0; transition: all 0.3s ease; }
+        .toast.show { opacity: 1; transform: translate(-50%, -50%) scale(1.05); }
+        .toast.success { background: #52c41a; color: #fff; }
+        .toast.error { background: #ff4d4f; color: #fff; }
+
+        .save-bar { display: flex; align-items: center; gap: 16px; justify-content: center; padding: 20px; }
+        .save-bar .status { font-size: 13px; color: #999; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎨 AI 主图提示词管理</h1>
+            <p>管理淘宝、抖音、虾皮三个平台的 5 张主图生成提示词</p>
+        </div>
+
+        <div class="nav-bar">
+            <a href="/index.html">蓝海词筛选</a>
+            <a href="/chat.html">AI 对话</a>
+            <a href="/trend.html">趋势词挖掘</a>
+            <a href="/scraper.html">1688 采集</a>
+            <a href="/file-manager.html">文件管理</a>
+            <a href="/ai-image.html" class="active">AI 图片生成</a>
+            <a href="/openclaw.html">OpenClaw</a>
+        </div>
+
+        <div class="platform-tabs" id="platformTabs">
+            <div class="platform-tab active" data-platform="taobao">淘宝</div>
+            <div class="platform-tab" data-platform="douyin">抖音</div>
+            <div class="platform-tab" data-platform="shopee">虾皮</div>
+        </div>
+
+        <div class="prompt-grid" id="promptGrid">
+            <!-- 由 JS 动态渲染 -->
+        </div>
+
+        <div class="save-bar">
+            <button class="btn btn-primary" id="saveBtn" onclick="savePrompts()">💾 保存提示词</button>
+            <span class="status" id="saveStatus"></span>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        let currentPlatform = 'taobao';
+        let promptsData = {};
+
+        // 平台中文名映射
+        const platformNames = { taobao: '淘宝', douyin: '抖音', shopee: '虾皮' };
+
+        // 加载提示词
+        async function loadPrompts() {
+            try {
+                const resp = await fetch('/api/ai-image/prompts');
+                if (resp.ok) {
+                    const data = await resp.json();
+                    promptsData = data.platforms || {};
+                    renderPrompts();
+                }
+            } catch (e) {
+                console.error('加载提示词失败', e);
+            }
+        }
+
+        // 渲染当前平台的提示词
+        function renderPrompts() {
+            const grid = document.getElementById('promptGrid');
+            const platform = currentPlatform;
+            const prompts = promptsData[platform] || {};
+
+            let html = '';
+            for (let i = 1; i <= 5; i++) {
+                const key = '图' + i;
+                const val = prompts[key] || '';
+                html += '<div class="prompt-card">';
+                html += '<div class="label">' + platformNames[platform] + ' - ' + key + '</div>';
+                html += '<textarea data-key="' + key + '" placeholder="输入该图片的生成风格提示词，例如：白色背景、光影突出、产品居中...">' + escapeHtml(val) + '</textarea>';
+                html += '</div>';
+            }
+            grid.innerHTML = html;
+        }
+
+        // 收集当前页面的提示词
+        function collectPrompts() {
+            const prompts = {};
+            document.querySelectorAll('#promptGrid textarea').forEach(ta => {
+                prompts[ta.dataset.key] = ta.value.trim();
+            });
+            return prompts;
+        }
+
+        // 保存提示词
+        async function savePrompts() {
+            const btn = document.getElementById('saveBtn');
+            const status = document.getElementById('saveStatus');
+            btn.disabled = true;
+            status.textContent = '保存中...';
+
+            // 收集当前平台数据
+            promptsData[currentPlatform] = collectPrompts();
+
+            try {
+                const resp = await fetch('/api/ai-image/prompts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ platforms: promptsData })
+                });
+                if (resp.ok) {
+                    showToast('✅ 提示词已保存', 'success');
+                    status.textContent = '已保存 ' + new Date().toLocaleTimeString();
+                } else {
+                    const err = await resp.json();
+                    showToast('❌ 保存失败: ' + (err.error || '未知错误'), 'error');
+                }
+            } catch (e) {
+                showToast('❌ 保存失败: ' + e.message, 'error');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        // 切换平台
+        document.getElementById('platformTabs').addEventListener('click', function(e) {
+            const tab = e.target.closest('.platform-tab');
+            if (!tab) return;
+
+            // 切换前保存当前平台数据
+            promptsData[currentPlatform] = collectPrompts();
+
+            document.querySelectorAll('.platform-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            currentPlatform = tab.dataset.platform;
+            renderPrompts();
+        });
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function showToast(msg, type) {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.className = 'toast ' + (type || '') + ' show';
+            setTimeout(() => toast.classList.remove('show'), 2000);
+        }
+
+        // 初始化
+        loadPrompts();
+    </script>
+</body>
+</html>

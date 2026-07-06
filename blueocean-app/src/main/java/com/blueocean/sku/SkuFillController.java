@@ -1,5 +1,6 @@
 package com.blueocean.sku;
 
+import com.blueocean.sku.extractor.SkuAttrExtractor;
 import io.micrometer.common.util.StringUtils;
 import org.apache.commons.compress.utils.Lists;
 import org.slf4j.Logger;
@@ -17,6 +18,7 @@ import java.util.*;
 @RequestMapping("/api/sku-fill")
 public class SkuFillController {
 
+    static SkuAttrExtractor SKU_EXTRACTOR;
     private static final Logger log = LoggerFactory.getLogger(SkuFillController.class);
 
     private final SkuFillService skuFillService;

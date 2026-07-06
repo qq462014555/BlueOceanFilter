@@ -154,14 +154,25 @@ public class CreateSpecAttrExtractor implements SkuAttrExtractor {
      * @param page 页面
      * @param aiResultJsonPath sku-ai-result.json 文件路径
      */
-    public void fillSku(Page page, String aiResultJsonPath,List<String> qianniuSkuProps) {
+    public void fillSku(Page page, String aiResultJsonPath,List<String> qianniuSkuProps,String mode ) {
         try {
             // 1. 读取 AI 结果
             String json = Files.readString(Path.of(aiResultJsonPath), StandardCharsets.UTF_8);
             JSONObject aiResult = JSON.parseObject(json);
-            JSONObject multi = aiResult.getJSONObject("multi");
-            if (multi == null) return;
-            JSONArray levels = multi.getJSONArray("levels");
+
+            // single 是 JSONArray，multi 是 JSONObject，分开处理
+            JSONArray singleArray = null;
+            JSONObject multiObj = null;
+            JSONArray levels = null;
+
+            if ("single".equals(mode)) {
+                singleArray = aiResult.getJSONArray("single");
+                if (singleArray == null || singleArray.isEmpty()) return;
+            } else {
+                multiObj = aiResult.getJSONObject("multi");
+                if (multiObj == null) return;
+                levels = multiObj.getJSONArray("levels");
+            }
             // 提取需要填写的属性名和选项
             java.util.List<String> targetAttrs = new java.util.ArrayList<>();
             java.util.Map<String, java.util.List<String>> attrOptions = new java.util.LinkedHashMap<>();
@@ -169,12 +180,21 @@ public class CreateSpecAttrExtractor implements SkuAttrExtractor {
             Boolean runsSelectSignRadio = false;
             //ai反馈走单个时候，尽可能走 多层单个属性
             if (levels == null || levels.isEmpty()) {
-                JSONArray options = aiResult.getJSONArray("single");
+                // single 模式：所有 SKU 名称作为选项
                 java.util.List<String> opts = new java.util.ArrayList<>();
-                for (int j = 0; j < options.size(); j++) {
-                    JSONObject o = options.getJSONObject(j);
-                    String name = o.getString("name");
-                    opts.add(name);
+                if (singleArray != null) {
+                    for (int j = 0; j < singleArray.size(); j++) {
+                        JSONObject o = singleArray.getJSONObject(j);
+                        String name = o.getString("name");
+                        opts.add(name);
+                    }
+                } else {
+                    JSONArray options = aiResult.getJSONArray("single");
+                    for (int j = 0; j < options.size(); j++) {
+                        JSONObject o = options.getJSONObject(j);
+                        String name = o.getString("name");
+                        opts.add(name);
+                    }
                 }
                 if( qianniuSkuProps.stream().anyMatch(prop -> "颜色分类".equalsIgnoreCase(prop.trim()))){
                     targetAttrs.add("颜色分类");

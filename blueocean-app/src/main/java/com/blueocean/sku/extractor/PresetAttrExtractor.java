@@ -18,23 +18,13 @@ public class PresetAttrExtractor implements SkuAttrExtractor {
     @Override
     public boolean matches(Page page) {
         try {
-            Object result = page.evaluate("""
-                    () => {
-                      const xpath = "//*[text()='销售属性'] | //*[contains(text(),'销售属性')]";
-                      const label = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
-                      if (!label) return false;
+            // 查找包含"销售规格"文本的元素，向上找是否有"+ 创建规格"按钮
+            com.microsoft.playwright.Locator saleSpecLabel = page.getByText("销售规格").first();
+            if (saleSpecLabel.count() == 0) return false;
 
-                      // 如果"销售属性"区域有"创建规格"按钮，交给 CreateSpecAttrExtractor 处理
-                      let container = label;
-                      for (let i = 0; i < 10 && container.parentElement; i++) {
-                        container = container.parentElement;
-                        const text = container.textContent || '';
-                        if (text.includes('创建规格')) return false;
-                      }
-                      return true;
-                    }
-                    """);
-            return Boolean.TRUE.equals(result);
+            // 用 Playwright 查找页面上是否有"创建规格"按钮
+            com.microsoft.playwright.Locator createBtn = page.getByText("添加规格").first();
+            return createBtn.count() > 0 && createBtn.isVisible();
         } catch (Exception e) {
             return false;
         }

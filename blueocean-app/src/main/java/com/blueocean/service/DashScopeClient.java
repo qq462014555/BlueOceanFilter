@@ -3,10 +3,17 @@ package com.blueocean.service;
 import com.alibaba.dashscope.aigc.generation.Generation;
 import com.alibaba.dashscope.aigc.generation.GenerationParam;
 import com.alibaba.dashscope.aigc.generation.GenerationResult;
+import com.alibaba.dashscope.aigc.multimodalconversation.MultiModalConversation;
+import com.alibaba.dashscope.aigc.multimodalconversation.MultiModalConversationParam;
+import com.alibaba.dashscope.aigc.multimodalconversation.MultiModalConversationResult;
 import com.alibaba.dashscope.common.Message;
+import com.alibaba.dashscope.common.MultiModalMessage;
 import com.alibaba.dashscope.common.Role;
 import com.alibaba.dashscope.exception.InputRequiredException;
 import com.alibaba.dashscope.exception.NoApiKeyException;
+import com.alibaba.dashscope.exception.UploadFileException;
+import com.alibaba.dashscope.utils.Constants;
+import com.alibaba.dashscope.utils.JsonUtils;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
@@ -20,15 +27,23 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
 import java.net.URI;
+import java.net.ProxySelector;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
 @Service
@@ -48,12 +63,15 @@ public class DashScopeClient {
     }
 
     private static final String DASHSCOPE_CHAT_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
+    private static final String DASHSCOPE_IMAGE_URL = "https://ws-ckfc6khjx4kwzy67.cn-beijing.maas.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation";
 
     // 可用模型常量
     public static final String MODEL_QWEN3_6_PLUS = "qwen3.6-plus";
+    public static final String MODEL_QWEN3_6_PLUS_VL = "qwen3.6-plus";
     public static final String MODEL_QWEN3_MAX = "qwen3-max";
     public static final String MODEL_QWEN_PLUS = "qwen-plus";
     public static final String MODEL_QWEN_TURBO = "qwen-turbo";
+    public static final String MODEL_QWEN_IMAGE = "qwen-image-2.0";
 
     public static final String DEFAULT_MODEL = MODEL_QWEN3_6_PLUS;
 
@@ -62,7 +80,10 @@ public class DashScopeClient {
 
     public DashScopeClient(AppProperties appProperties) {
         this.apiKey = appProperties.getDashscopeApiKey();
-        this.httpClient = HttpClient.newHttpClient();
+        // DashScope 是国内 API，直连不走代理
+        this.httpClient = HttpClient.newBuilder()
+                .proxy(ProxySelector.of(null))
+                .build();
     }
 
     private static final String CHAT_SYSTEM_PROMPT = "你是一个 helpful 的 AI 助手。请用简洁清晰的语言回答问题。";
@@ -221,6 +242,195 @@ public class DashScopeClient {
                 .getString("content");
         log.info("[对话] 完整回复={}", content);
         return content.trim();
+    }
+
+    /**
+     * 多模态对话（文字 + 多张图片），使用 qwen3.6-plus
+     */
+    public String chatWithImages(String systemPrompt, String userText, List<String> imageBase64List) throws IOException, InterruptedException, ExecutionException {
+        String sysPrompt = (systemPrompt != null && !systemPrompt.isEmpty()) ? systemPrompt : CHAT_SYSTEM_PROMPT;
+        log.info("[多模态] {}, 文字={}字, 图片={}张", MODEL_QWEN3_6_PLUS_VL, userText.length(), imageBase64List != null ? imageBase64List.size() : 0);
+
+        JSONArray messages = new JSONArray();
+
+        // System
+        JSONObject sysMsg = new JSONObject();
+        sysMsg.put("role", "system");
+        sysMsg.put("content", sysPrompt);
+        messages.add(sysMsg);
+
+        // User message with text + images
+        JSONObject userMsg = new JSONObject();
+        userMsg.put("role", "user");
+        JSONArray contentArr = new JSONArray();
+
+        // Text
+        JSONObject textPart = new JSONObject();
+        textPart.put("type", "text");
+        textPart.put("text", userText);
+        contentArr.add(textPart);
+
+        // Images
+        if (imageBase64List != null) {
+            for (String imgBase64 : imageBase64List) {
+                JSONObject imgPart = new JSONObject();
+                imgPart.put("type", "image_url");
+                JSONObject urlObj = new JSONObject();
+                urlObj.put("url", imgBase64);
+                imgPart.put("image_url", urlObj);
+                contentArr.add(imgPart);
+            }
+        }
+
+        userMsg.put("content", contentArr);
+        messages.add(userMsg);
+
+        JSONObject body = new JSONObject();
+        body.put("model", MODEL_QWEN3_6_PLUS_VL);
+        body.put("messages", messages);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(DASHSCOPE_CHAT_URL))
+                .header("Content-Type", "application/json")
+                .header("Authorization", "Bearer " + apiKey)
+                .POST(HttpRequest.BodyPublishers.ofString(body.toJSONString(), StandardCharsets.UTF_8))
+                .build();
+
+        CompletableFuture<HttpResponse<String>> future =
+                httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString());
+
+        HttpResponse<String> response = future.get();
+
+        JSONObject respJson = JSON.parseObject(response.body());
+        if (response.statusCode() != 200) {
+            String errMsg = respJson != null ? respJson.getString("message") : "未知错误";
+            log.error("[多模态] API 错误: {}", errMsg);
+            throw new IOException("API 调用失败: " + errMsg);
+        }
+
+        String content = respJson.getJSONArray("choices")
+                .getJSONObject(0)
+                .getJSONObject("message")
+                .getString("content");
+        log.info("[多模态] 回复={}字", content.length());
+        return content.trim();
+    }
+
+    /**
+     * 调用 Qwen-Image-2.0 生成白底图（直接 HTTP 调用）
+     * @param prompt 生成提示词
+     * @param refImages 参考图 base64 列表
+     * @param n 生成数量
+     * @return 图片文件路径列表（已保存到磁盘）
+     */
+    public List<String> generateImages(String prompt, List<String> refImages, int n, String saveDir) {
+        log.info("[白底图] qwen-image-2.0-pro, 提示词={}字, 参考图={}张, n={}", prompt.length(), refImages != null ? refImages.size() : 0, n);
+
+        try {
+            // 构建 content 数组（参考图在前，文字在后）
+            JSONArray contentArr = new JSONArray();
+            if (refImages != null) {
+                for (String img : refImages) {
+                    contentArr.add(JSONObject.of("image", img));
+                }
+            }
+            contentArr.add(JSONObject.of("text", prompt));
+
+            JSONObject userMsg = new JSONObject();
+            userMsg.put("role", "user");
+            userMsg.put("content", contentArr);
+
+            JSONObject input = new JSONObject();
+            input.put("messages", new JSONArray().fluentAdd(userMsg));
+
+            JSONObject params = new JSONObject();
+            params.put("n", n);
+            params.put("negative_prompt", "文字,水印,杂乱背景");
+            params.put("prompt_extend", true);
+            params.put("watermark", false);
+            params.put("size", "1440*1440");
+
+            JSONObject body = new JSONObject();
+            body.put("model", "qwen-image-2.0-pro");
+            body.put("input", input);
+            body.put("parameters", params);
+
+            // 请求日志
+            String jsonBody = body.toJSONString();
+            String logBody = jsonBody.replaceAll("\"image\":\"data:([^;]+;base64,)[^\"]{20}[^\"]*\"", "\"image\":\"data:$1...(截断)\"");
+            log.info("[白底图] 请求:\ncurl -X POST {} \\\n  -H \"Authorization: Bearer {}\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{}'",
+                    DASHSCOPE_IMAGE_URL, apiKey.length() > 8 ? "sk-***" + apiKey.substring(apiKey.length() - 4) : apiKey, logBody);
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(DASHSCOPE_IMAGE_URL))
+                    .header("Content-Type", "application/json")
+                    .header("Authorization", "Bearer " + apiKey)
+                    .POST(HttpRequest.BodyPublishers.ofString(jsonBody, StandardCharsets.UTF_8))
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() != 200) {
+                throw new IOException("Qwen-Image 调用失败: HTTP " + response.statusCode() + " - " + response.body());
+            }
+
+            // 解析返回的图片 URL
+            JSONObject resp = JSON.parseObject(response.body());
+            JSONObject output = resp.getJSONObject("output");
+            List<String> savedPaths = new ArrayList<>();
+            List<String> angles = List.of("正面45度", "正侧面", "俯视");
+            int idx = 0;
+
+            if (output != null) {
+                JSONArray choices = output.getJSONArray("choices");
+                if (choices != null) {
+                    for (int i = 0; i < choices.size() && idx < n; i++) {
+                        JSONObject choice = choices.getJSONObject(i);
+                        JSONObject message = choice.getJSONObject("message");
+                        if (message == null) continue;
+                        JSONArray content = message.getJSONArray("content");
+                        if (content != null) {
+                            for (int j = 0; j < content.size() && idx < n; j++) {
+                                String imgUrl = content.getJSONObject(j).getString("image");
+                                if (imgUrl == null || imgUrl.isEmpty()) continue;
+
+                                // 直接下载并保存为 JPG（剥离元数据）
+                                String fileName = String.format("白底图_%s.jpg", angles.get(idx));
+                                Path target = Paths.get(saveDir, fileName);
+                                try {
+                                    HttpRequest dlReq = HttpRequest.newBuilder()
+                                            .uri(URI.create(imgUrl))
+                                            .timeout(java.time.Duration.ofSeconds(30))
+                                            .GET().build();
+                                    HttpResponse<byte[]> dlResp = httpClient.send(dlReq, HttpResponse.BodyHandlers.ofByteArray());
+                                    if (dlResp.statusCode() == 200 && dlResp.body() != null && dlResp.body().length > 0) {
+                                        // BufferedImage → JPG（剥离 AI 元数据）
+                                        java.awt.image.BufferedImage rawImg = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(dlResp.body()));
+                                        if (rawImg != null) {
+                                            javax.imageio.ImageIO.write(rawImg, "jpg", target.toFile());
+                                        } else {
+                                            java.nio.file.Files.write(target, dlResp.body());
+                                        }
+                                        savedPaths.add(target.toString());
+                                        log.info("[白底图] 已保存: {} ({}KB)", fileName, dlResp.body().length / 1024);
+                                        idx++;
+                                    }
+                                } catch (Exception e) {
+                                    log.warn("[白底图] 下载/保存失败: {}", e.getMessage());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            log.info("[白底图] 获取到 {} 张图片", savedPaths.size());
+            return savedPaths;
+
+        } catch (Exception e) {
+            log.error("[白底图] 调用失败", e);
+            throw new RuntimeException("Qwen-Image 生成失败: " + e.getMessage(), e);
+        }
     }
 
     /**

@@ -38,23 +38,57 @@ public class QianniuAttributeController {
     }
 
     @PostMapping("/extract")
-    public ResponseEntity<Map<String, Object>> extract() {
-        log.info("开始提取千牛商品属性");
-        Map<String, Object> result = scraper.extract();
+    public ResponseEntity<Map<String, Object>> extract(@RequestParam(defaultValue = "false") boolean forceNew) {
+        log.info("开始提取千牛商品属性, forceNew={}", forceNew);
 
-        // 1. 提取成功后，自动调用属性填充
+        // 1. 先轻量提取标题（不获取完整属性字段），用于缓存判断
+        Map<String, Object> titleResult = scraper.extractTitleOnly();
+        if (!Boolean.TRUE.equals(titleResult.get("success"))) {
+            return ResponseEntity.ok(titleResult);
+        }
+
+        String title = (String) titleResult.get("title");
+        if (title == null || title.isEmpty()) {
+            Map<String, Object> err = new LinkedHashMap<>();
+            err.put("success", false);
+            err.put("error", "未能获取宝贝标题");
+            return ResponseEntity.ok(err);
+        }
+
+        // 2. 获取标题后判断缓存（forceNew=true 时跳过缓存）
+        if (!forceNew) {
+            Path cachedAiBack = findAiBackFile(title);
+            if (cachedAiBack != null) {
+                log.info("跳板命中 🚀 已有 AI 缓存，跳过页面属性提取+AI，直接发送填写信号: {}", cachedAiBack);
+                Map<String, Object> result = new LinkedHashMap<>(titleResult);
+                result.put("autoFillResult", Map.of(
+                        "success", true,
+                        "cached", true,
+                        "savedPath", cachedAiBack.toString(),
+                        "message", "使用已有 AI 缓存，跳过提取"
+                ));
+                result.put("fillFieldsSignaled", true);
+                result.put("fillFieldsPath", cachedAiBack.toString());
+                ClaudeSignal.fillFields(cachedAiBack.toString(), "QianniuAttributeController", title);
+                return ResponseEntity.ok(result);
+            }
+            log.info("未找到缓存，继续完整提取流程");
+        } else {
+            log.info("forceNew=true，跳过缓存，强制走完整提取");
+        }
+
+        // 3. 无缓存 / 强制新请求：走完整提取流程（获取属性字段 → AI 解析 → 填写）
+        Map<String, Object> result = scraper.extract();
         if (Boolean.TRUE.equals(result.get("success"))) {
-            String title = (String) result.get("title");
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> fields = (List<Map<String, Object>>) result.get("fields");
             if (title != null && fields != null && !fields.isEmpty()) {
                 try {
-                    log.info("提取成功，自动调用属性填充: title={}, fields={}", title, fields.size());
+                    log.info("提取成功，调用 AI 填充: title={}, fields={}", title, fields.size());
                     Map<String, Object> fillResult = autoFillService.autoFill(title, fields);
                     if (Boolean.TRUE.equals(fillResult.get("success"))) {
                         result.put("autoFillResult", fillResult);
 
-                        // 2. AI 填充成功后，执行 fill-fields 逻辑
                         Path aiBackPath = findAiBackFile(title);
                         if (aiBackPath != null) {
                             log.info("AI 填充成功，发送 Claude 填写信号: {}", aiBackPath);

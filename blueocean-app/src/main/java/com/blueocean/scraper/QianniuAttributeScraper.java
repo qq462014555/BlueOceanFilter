@@ -54,7 +54,53 @@ public class QianniuAttributeScraper {
     }
 
     /**
-     * 执行属性提取
+     * 只提取宝贝标题（轻量，不提取完整属性字段），用于缓存判断
+     */
+    public Map<String, Object> extractTitleOnly() {
+        Map<String, Object> result = new LinkedHashMap<>();
+        Playwright playwright = null;
+        Browser browser = null;
+
+        try {
+            playwright = Playwright.create();
+            log.info("正在连接 CDP: {}", CDP_ENDPOINT);
+            browser = playwright.chromium().connectOverCDP(CDP_ENDPOINT);
+            log.info("CDP 连接成功");
+
+            BrowserContext context = browser.contexts().isEmpty()
+                    ? browser.newContext()
+                    : browser.contexts().get(0);
+
+            Page page = findPublishTab(context);
+            if (page == null) {
+                result.put("success", false);
+                result.put("error", "未找到「商品发布」标签页，请先在 Chrome 中打开该页面");
+                return result;
+            }
+
+            log.info("找到商品发布页面: {}", page.url());
+            page.bringToFront();
+            page.evaluate("window.scrollTo(0, 0);");
+            page.waitForTimeout(500);
+
+            String qianniuTitle = extractTitle(page);
+            log.info("宝贝标题: {}", qianniuTitle);
+
+            result.put("success", true);
+            result.put("title", qianniuTitle);
+            result.put("sourceUrl", page.url());
+
+        } catch (Exception e) {
+            log.error("提取标题失败", e);
+            result.put("success", false);
+            result.put("error", e.getMessage());
+        }
+
+        return result;
+    }
+
+    /**
+     * 执行属性提取（完整流程）
      */
     public Map<String, Object> extract() {
         Map<String, Object> result = new LinkedHashMap<>();
