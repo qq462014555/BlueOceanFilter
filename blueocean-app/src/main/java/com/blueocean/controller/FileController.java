@@ -530,12 +530,29 @@ public class FileController {
             try (DirectoryStream<Path> stream = Files.newDirectoryStream(basePath,
                     p -> Files.isDirectory(p) && p.getFileName().toString().contains(date))) {
                 for (Path dayDir : stream) {
-                    try (DirectoryStream<Path> catStream = Files.newDirectoryStream(dayDir, Files::isDirectory)) {
-                        for (Path catDir : catStream) {
-                            try (DirectoryStream<Path> prodStream = Files.newDirectoryStream(catDir,
-                                    p -> Files.isDirectory(p) && !imageFileService.isKnownSubDir(p.getFileName().toString()))) {
-                                for (Path prodDir : prodStream) {
-                                    products.add(loadProduct(prodDir));
+                    try (DirectoryStream<Path> subStream = Files.newDirectoryStream(dayDir, Files::isDirectory)) {
+                        for (Path subDir : subStream) {
+                            // 判断是类目目录还是商品目录：如果子目录下含有主图/详情图等，说明是商品目录
+                            boolean hasImageSubDir = false;
+                            try (DirectoryStream<Path> subSub = Files.newDirectoryStream(subDir)) {
+                                for (Path p : subSub) {
+                                    String name = p.getFileName().toString();
+                                    if ("主图".equals(name) || "详情图".equals(name) || "SKU图".equals(name)) {
+                                        hasImageSubDir = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (hasImageSubDir) {
+                                // 两层结构：日期目录 → 商品目录
+                                products.add(loadProduct(subDir));
+                            } else {
+                                // 三层结构：日期目录 → 类目目录 → 商品目录
+                                try (DirectoryStream<Path> prodStream = Files.newDirectoryStream(subDir,
+                                        p -> Files.isDirectory(p) && !imageFileService.isKnownSubDir(p.getFileName().toString()))) {
+                                    for (Path prodDir : prodStream) {
+                                        products.add(loadProduct(prodDir));
+                                    }
                                 }
                             }
                         }
@@ -562,7 +579,9 @@ public class FileController {
                 for (Map.Entry<String, Object> entry : fullData.entrySet()) {
                     String key = entry.getKey();
                     if (!Set.of("title", "productDir", "mainImages", "detailImages", "skuImages", "videoUrl").contains(key)) {
-                        product.put(key, entry.getValue());
+                        if(!"dirTitle".equalsIgnoreCase(key)){
+                            product.put(key, entry.getValue());
+                        }
                     }
                 }
             } catch (Exception e) {
