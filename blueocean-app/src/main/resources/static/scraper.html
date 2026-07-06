@@ -7,7 +7,7 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
-        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .container { max-width: 1600px; margin: 0 auto; padding: 20px; }
         .header { background: linear-gradient(135deg, #ff6a00, #ee0979); color: #fff; padding: 24px; border-radius: 12px; margin-bottom: 24px; }
         .header h1 { font-size: 24px; margin-bottom: 8px; }
         .header p { opacity: 0.9; font-size: 14px; }
@@ -114,7 +114,7 @@
         .image-grid .img-placeholder:hover { border-color: #ff6a00; color: #ff6a00; background: #fff2e8; }
         .image-grid .img-placeholder .placeholder-icon { font-size: 28px; margin-bottom: 4px; }
         .image-grid .img-placeholder .placeholder-text { font-size: 11px; }
-        .upload-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: none; align-items: center; justify-content: center; z-index: 1100; }
+        .upload-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: none; align-items: center; justify-content: center; z-index: 1300; }
         .upload-modal.active { display: flex; }
         .upload-modal-content { background: #fff; border-radius: 12px; width: 90%; max-width: 500px; overflow: hidden; }
         .upload-modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 24px; border-bottom: 1px solid #f0f0f0; }
@@ -188,8 +188,8 @@
         .empty-state { text-align: center; padding: 60px 20px; color: #999; }
         .empty-state svg { width: 64px; height: 64px; margin-bottom: 16px; opacity: 0.3; }
 
-        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: none; align-items: center; justify-content: center; z-index: 1000; cursor: pointer; }
-        .modal.active { display: flex; }
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: none; align-items: center; justify-content: center; z-index: 9999 !important; cursor: pointer; }
+        .modal.active { display: flex !important; }
         .modal img { max-width: 90%; max-height: 90%; max-width: min(90vw, 800px); max-height: min(90vh, 600px); object-fit: contain; border-radius: 8px; }
         .modal-nav { position:absolute; top:50%; transform:translateY(-50%); font-size:40px; color:#fff; cursor:pointer; padding:20px; user-select:none; opacity:0.6; z-index:2001; }
         .modal-nav:hover { opacity:1; }
@@ -240,12 +240,12 @@
         /* AI 主图重绘弹窗 */
         .ai-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: none; align-items: center; justify-content: center; z-index: 1200; }
         .ai-modal.active { display: flex; }
-        .ai-modal-content { background: #fff; border-radius: 12px; width: 95%; max-width: 1200px; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; }
+        .ai-modal-content { background: #fff; border-radius: 12px; width: 95%; max-width: 1600px; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; }
         .ai-modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 24px; border-bottom: 1px solid #f0f0f0; }
         .ai-modal-header h3 { font-size: 18px; font-weight: 600; }
         .ai-modal-close { background: none; border: none; font-size: 28px; cursor: pointer; color: #999; padding: 0 6px; }
         .ai-modal-close:hover { color: #333; }
-        .ai-modal-body { padding: 20px 24px; overflow-y: auto; flex: 1; min-height: 450px; }
+        .ai-modal-body { padding: 20px 24px; overflow-y: auto; height: 1500px; }
         .ai-modal-footer { padding: 12px 24px; border-top: 1px solid #f0f0f0; display: flex; justify-content: flex-end; align-items: center; gap: 12px; }
         .btn-ai-redraw { background: linear-gradient(135deg, #667eea, #764ba2); border: none; color: #fff; padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s; margin-left: 8px; }
         .btn-ai-redraw:hover { transform: scale(1.03); box-shadow: 0 4px 16px rgba(102,126,234,0.4); }
@@ -253,7 +253,7 @@
         .ai-tab { flex:1; padding:10px; border:2px solid #e0e0e0; border-radius:8px; cursor:pointer; font-size:13px; font-weight:600; background:#fff; text-align:center; transition:all 0.2s; }
         .ai-tab:hover { border-color:#667eea; color:#667eea; }
         .ai-tab.active { background:#667eea; color:#fff; border-color:#667eea; }
-        .ai-tab-content { min-height:200px; }
+        .ai-tab-content { min-height:1400px; }
         .btn-ai-generate { background: linear-gradient(135deg, #667eea, #764ba2); border: none; color: #fff; padding: 10px 32px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
         .btn-ai-generate:hover { transform: scale(1.03); box-shadow: 0 4px 16px rgba(102,126,234,0.4); }
         .btn-ai-generate:disabled { background: #ccc; cursor: not-allowed; transform: none; box-shadow: none; }
@@ -532,14 +532,17 @@
                 <!-- Tab: 替换图 -->
                 <div class="ai-tab-content" id="aiTabReplace" style="display:none;">
                     <div style="font-size:13px;font-weight:600;margin-bottom:12px;">🔄 替换图</div>
-                    <input type="file" id="aiReplaceFileInput" accept="image/*" multiple style="display:none;" onchange="onReplaceFilesSelected(event)">
                     <div class="image-grid" id="aiReplaceGrid">
                         <div class="img-item">
-                            <div class="img-placeholder" onclick="document.getElementById('aiReplaceFileInput').click()">
+                            <div class="img-placeholder" onclick="openReplaceUpload(this)">
                                 <div class="placeholder-icon">+</div>
                                 <div class="placeholder-text">添加图</div>
                             </div>
                         </div>
+                    </div>
+                    <div class="model-select" style="margin-top:12px;">
+                        <label>图生成ai模型：</label>
+                        <select id="aiReplaceModelSelect"></select>
                     </div>
                     <div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center;">
                         <span id="aiReplaceStatus" style="font-size:12px;color:#999;"></span>
@@ -559,7 +562,7 @@
                     </div>
                     <div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center;">
                         <span id="aiGenerateStatus" style="font-size:13px;color:#999;"></span>
-                        <button class="btn-ai-generate" id="aiGenerateBtn" onclick="generateAiImages()">🚀 生成全部 5 张图</button>
+                        <button class="btn-ai-generate" id="aiGenerateBtn" onclick="generateAiImages()">🚀 生成全部勾选的主图</button>
                     </div>
                 </div>
             </div>
@@ -568,7 +571,7 @@
 
     <script src="/js/scraper-product.js?v=15"></script>
     <script src="/js/scraper-title.js?v=2"></script>
-    <script src="/js/scraper-ui.js?v=11"></script>
+    <script src="/js/scraper-ui.js?v=13"></script>
     <script src="/js/scraper-core.js?v=8"></script>
 </body>
 </html>

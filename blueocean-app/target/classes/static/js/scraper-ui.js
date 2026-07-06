@@ -131,6 +131,7 @@ let _aiRedrawPlatform = 'taobao';
 let _aiRedrawPrompts = {};
 let _aiRedrawAnalysis = {};
 let _aiReplaceImages = [];
+let _aiReplacePrompts = [];
 const _aiPlatformNames = { taobao: '淘宝', douyin: '抖音', shopee: '虾皮' };
 
 function openAiRedrawModal(productDir) {
@@ -161,19 +162,40 @@ async function loadAiPrompts() {
     }
 }
 
-function renderAiModelSelect(models) {
-    const sel = document.getElementById('aiModelSelect');
-    if (!sel) return;
-    sel.innerHTML = '';
-    if (models.length > 0) {
-        models.forEach(m => {
-            const opt = document.createElement('option');
-            opt.value = m.id; opt.textContent = m.name;
-            sel.appendChild(opt);
-        });
-    } else {
-        sel.innerHTML = '<option value="black-forest-labs/FLUX.1-schnell">FLUX.1 Schnell</option>';
+// 两个模型下拉同步
+document.addEventListener('change', function(e) {
+    if (e.target.id === 'aiModelSelect') {
+        const other = document.getElementById('aiReplaceModelSelect');
+        if (other) other.value = e.target.value;
+    } else if (e.target.id === 'aiReplaceModelSelect') {
+        const other = document.getElementById('aiModelSelect');
+        if (other) other.value = e.target.value;
     }
+});
+
+function renderAiModelSelect(models) {
+    const selects = ['aiModelSelect', 'aiReplaceModelSelect'];
+    selects.forEach(id => {
+        const sel = document.getElementById(id);
+        if (!sel) return;
+        const prevVal = sel.value; // 保存当前选中值
+        sel.innerHTML = '';
+        if (models.length > 0) {
+            models.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m.id; opt.textContent = m.name;
+                sel.appendChild(opt);
+            });
+        } else {
+            sel.innerHTML = '<option value="black-forest-labs/FLUX.1-schnell">FLUX.1 Schnell</option>';
+        }
+        // 恢复之前的选中值
+        if (prevVal) {
+            for (const opt of sel.options) {
+                if (opt.value === prevVal) { sel.value = prevVal; break; }
+            }
+        }
+    });
 }
 
 function renderAiPromptGrid() {
@@ -318,6 +340,7 @@ async function autoGeneratePrompts(productDir, forceNew) {
 // 白底图
 async function loadWhiteBgImages(productDir) {
     if (!productDir) return;
+    showToast('⏳ 正在获取/生成白底图...', 'info');
     try {
         const resp = await fetch('/api/ai-image/generate-white-bg', {
             method: 'POST',
@@ -343,8 +366,10 @@ async function loadWhiteBgImages(productDir) {
         });
         html += '</div></div>';
         analysisSection.insertAdjacentHTML('afterend', html);
+        showToast('✅ 白底图' + (data.fromCache ? '已存在' : 'AI 生成完成'), 'success');
     } catch (e) {
         console.error('加载白底图失败', e);
+        showToast('⚠️ 白底图获取失败: ' + e.message, 'error');
     }
 }
 
@@ -373,10 +398,18 @@ async function generateAiImages() {
     const status = document.getElementById('aiGenerateStatus');
     const model = document.getElementById('aiModelSelect').value;
     const prompts = {};
-    document.querySelectorAll('#aiPromptGrid textarea').forEach(ta => {
-        prompts[ta.dataset.key] = ta.value.trim();
+    const checkedKeys = [];
+    document.querySelectorAll('#aiPromptGrid input[data-check-key]').forEach(cb => {
+        if (cb.checked) {
+            const key = cb.dataset.checkKey;
+            const ta = document.querySelector('textarea[data-key="' + key + '"]');
+            if (ta) {
+                const val = ta.value.trim();
+                if (val) { prompts[key] = val; checkedKeys.push(key); }
+            }
+        }
     });
-    const keys = Object.keys(prompts).filter(k => prompts[k]);
+    const keys = checkedKeys;
     if (keys.length === 0) {
         status.textContent = '⚠️ 请填写提示词';
         return;
@@ -404,21 +437,51 @@ async function generateAiImages() {
         status.textContent = '❌ ' + e.message;
     }
     btn.disabled = false;
-    btn.textContent = '🚀 生成全部 5 张图';
+    btn.textContent = '🚀 生成全部勾选的主图';
 }
 
 // 替换图函数
-function onReplaceFilesSelected(event) {
-    const files = event.target.files;
-    for (const file of files) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            _aiReplaceImages.push(e.target.result);
-            renderReplaceGrid();
-        };
-        reader.readAsDataURL(file);
+let _replacePlaceholderEl = null;
+
+function openReplaceUpload(el) {
+    _replacePlaceholderEl = el;
+    const btn = document.getElementById('uploadConfirmBtn');
+    btn._originalOnclick = btn.onclick; // 保存原始 onclick
+    document.getElementById('uploadModalTitle').textContent = '添加替换图';
+    document.getElementById('uploadFileInput').value = '';
+    document.getElementById('uploadUrlInput').value = '';
+    btn.disabled = false;
+    if (typeof switchUploadTab === 'function') switchUploadTab('local');
+    document.getElementById('uploadModal').classList.add('active');
+    btn.onclick = confirmReplaceUpload;
+}
+
+async function confirmReplaceUpload() {
+    const fileInput = document.getElementById('uploadFileInput');
+    const urlInput = document.getElementById('uploadUrlInput');
+    let imageData = null;
+
+    if (fileInput.files && fileInput.files[0]) {
+        const file = fileInput.files[0];
+        imageData = await new Promise(resolve => {
+            const reader = new FileReader();
+            reader.onload = e => resolve(e.target.result);
+            reader.readAsDataURL(file);
+        });
+    } else if (urlInput.value.trim()) {
+        imageData = urlInput.value.trim();
     }
-    event.target.value = '';
+
+    if (!imageData) { showToast('请选择文件或填写URL', 'error'); return; }
+
+    _aiReplaceImages.push(imageData);
+    _aiReplacePrompts.push('');
+    renderReplaceGrid();
+    // 恢复确认按钮原始 onclick
+    const btn = document.getElementById('uploadConfirmBtn');
+    if (btn && btn._originalOnclick) btn.onclick = btn._originalOnclick;
+    closeUploadModal();
+    showToast('✅ 已添加替换图', 'success');
 }
 
 function renderReplaceGrid() {
@@ -426,19 +489,26 @@ function renderReplaceGrid() {
     if (!grid) return;
     let html = '';
     _aiReplaceImages.forEach((img, idx) => {
-        const src = img.startsWith('data:') ? img : '/api/ai-image/image-file?path=' + encodeURIComponent(img);
-        html += '<div class="img-item" data-filepath="">';
+        const src = img.startsWith('data:') || img.startsWith('http://') || img.startsWith('https://') ? img : '/api/ai-image/image-file?path=' + encodeURIComponent(img);
+        html += '<div class="img-item" data-filepath="" style="margin-bottom:8px;">';
         html += '<div class="img-wrap"><img draggable="true" src="' + src + '" onclick="showModal(this.src)">';
         html += '<div class="img-label">' + (idx + 1) + '</div></div>';
-        html += '<div class="img-actions-bar"><button class="action-btn btn-delete" onclick="removeReplaceImage(' + idx + ')">删除</button></div></div>';
+        html += '<div class="img-actions-bar"><button class="action-btn btn-delete" onclick="removeReplaceImage(' + idx + ')">删除</button></div>';
+        html += '<input type="text" class="replace-prompt-input" data-idx="' + idx + '" placeholder="追加提示词（如：替换模特手上的物件）" value="' + escapeHtml(_aiReplacePrompts[idx] || '') + '" style="width:100%;margin-top:4px;padding:6px 8px;border:1px solid #d9d9d9;border-radius:4px;font-size:11px;outline:none;" onchange="updateReplacePrompt(' + idx + ', this.value)">';
+        html += '</div>';
     });
-    html += '<div class="img-item"><div class="img-placeholder" onclick="document.getElementById(\'aiReplaceFileInput\').click()">';
+    html += '<div class="img-item"><div class="img-placeholder" onclick="openReplaceUpload(this)">';
     html += '<div class="placeholder-icon">+</div><div class="placeholder-text">添加图</div></div></div>';
     grid.innerHTML = html;
 }
 
+function updateReplacePrompt(idx, val) {
+    _aiReplacePrompts[idx] = val;
+}
+
 function removeReplaceImage(idx) {
     _aiReplaceImages.splice(idx, 1);
+    _aiReplacePrompts.splice(idx, 1);
     renderReplaceGrid();
 }
 
@@ -452,7 +522,7 @@ async function generateReplaceImages() {
     try {
         const resp = await fetch('/api/ai-image/replace', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ productDir: _aiRedrawProductDir, images: _aiReplaceImages })
+            body: JSON.stringify({ productDir: _aiRedrawProductDir, images: _aiReplaceImages, prompts: _aiReplacePrompts, model: document.getElementById('aiReplaceModelSelect').value })
         });
         if (resp.ok) {
             const data = await resp.json();
@@ -461,19 +531,21 @@ async function generateReplaceImages() {
             if (data.results && data.results.length > 0) {
                 const old = document.querySelector('.ai-replace-previews');
                 if (old) old.remove();
-                const modalBody = document.querySelector('.ai-modal-body');
-                if (!modalBody) return;
-                const div = document.createElement('div');
-                div.className = 'ai-replace-previews';
-                div.style.cssText = 'border-top:1px solid #eee;padding-top:12px;margin-top:12px;';
-                let ph = '<div style="font-size:13px;font-weight:600;margin-bottom:8px;">🖼️ 替换结果</div><div style="display:flex;gap:10px;flex-wrap:wrap;">';
+                const replaceGrid = document.getElementById('aiReplaceGrid');
+                if (!replaceGrid) return;
+                let rh = '<div style="width:100%;border-top:1px solid #eee;padding-top:12px;margin-top:12px;"><div style="font-size:13px;font-weight:600;margin-bottom:8px;">🖼️ 替换结果</div><div style="display:flex;gap:10px;flex-wrap:wrap;">';
                 data.results.forEach(r => {
                     const u = '/api/ai-image/image-file?path=' + encodeURIComponent(r.path);
-                    ph += '<div style="text-align:center;"><img src="' + u + '" style="width:100px;height:100px;object-fit:cover;border-radius:6px;border:1px solid #e0e0e0;cursor:pointer;" onclick="showModal(this.src)"><div style="font-size:10px;color:#999;margin-top:2px;">' + r.key + '</div></div>';
+                    rh += '<div style="text-align:center;"><img src="' + u + '" style="width:100px;height:100px;object-fit:cover;border-radius:6px;border:1px solid #e0e0e0;cursor:pointer;" onclick="showModal(this.src)"><div style="font-size:10px;color:#999;margin-top:2px;">' + r.key + '</div></div>';
                 });
-                ph += '</div>';
-                div.innerHTML = ph;
-                modalBody.appendChild(div);
+                rh += '</div></div>';
+                // 移除旧的预览
+                const old = replaceGrid.parentElement.querySelector('.ai-replace-results');
+                if (old) old.remove();
+                const wrap = document.createElement('div');
+                wrap.className = 'ai-replace-results';
+                wrap.innerHTML = rh;
+                replaceGrid.parentElement.insertBefore(wrap, replaceGrid.nextSibling);
             }
         } else {
             status.textContent = '❌ 请求失败';

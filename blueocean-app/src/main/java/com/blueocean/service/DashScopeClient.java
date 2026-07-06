@@ -368,10 +368,18 @@ public class DashScopeClient {
                     .POST(HttpRequest.BodyPublishers.ofString(jsonBody, StandardCharsets.UTF_8))
                     .build();
 
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-
-            if (response.statusCode() != 200) {
-                throw new IOException("Qwen-Image 调用失败: HTTP " + response.statusCode() + " - " + response.body());
+            // 限流重试
+            HttpResponse<String> response = null;
+            for (int r = 0; r < 3; r++) {
+                if (r > 0) { log.warn("[白底图] 第{}次重试...", r); Thread.sleep(r * 3000L); }
+                try {
+                    response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                    if (response.statusCode() == 429) { log.warn("[白底图] 限流，重试"); continue; }
+                    break;
+                } catch (Exception e) { log.warn("[白底图] 请求异常", e); if (r == 2) throw e; }
+            }
+            if (response == null || response.statusCode() != 200) {
+                throw new IOException("Qwen-Image 调用失败: HTTP " + (response != null ? response.statusCode() + " - " + response.body() : "无响应"));
             }
 
             // 解析返回的图片 URL

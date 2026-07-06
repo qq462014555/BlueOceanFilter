@@ -513,9 +513,14 @@ public class AiImageController {
         String productDir = (String) request.get("productDir");
         @SuppressWarnings("unchecked")
         List<String> images = (List<String>) request.get("images");
+        @SuppressWarnings("unchecked")
+        List<String> prompts = (List<String>) request.get("prompts");
         if (productDir == null || images == null || images.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("success", false, "error", "缺少参数"));
         }
+
+        String model = (String) request.get("model");
+        if (model == null || model.isEmpty()) model = "black-forest-labs/FLUX.1-schnell";
 
         List<Map<String, Object>> results = new ArrayList<>();
         List<Map<String, Object>> errors = new ArrayList<>();
@@ -523,6 +528,7 @@ public class AiImageController {
         // 使用串行生成，每张间隔2秒
         for (int i = 0; i < images.size(); i++) {
             String userImg = images.get(i);
+            String extraPrompt = (prompts != null && i < prompts.size()) ? prompts.get(i) : "";
             try {
                 // 保存用户输入图
                 Path inputDir = Paths.get(productDir, "替换图_输入");
@@ -543,6 +549,9 @@ public class AiImageController {
                     prompt = "请将白底图中的产品替换到场景图中";
                 }
                 prompt += "\n当前第" + (i + 1) + "张场景图，共" + images.size() + "张。";
+                if (!extraPrompt.isEmpty()) {
+                    prompt += "\n用户补充说明：" + extraPrompt;
+                }
 
                 // 白底图参考 + 用户图作为参考
                 List<String> refs = openRouterService.stitchDirToBase64(Paths.get(productDir, "白底图"), "替换_白底图参考.jpg", 3);
@@ -550,7 +559,7 @@ public class AiImageController {
                 if (refs.size() > 4) refs = new ArrayList<>(refs.subList(0, 4));
 
                 String savedPath = openRouterService.generateImageWithRefs(
-                        "black-forest-labs/FLUX.1-schnell", prompt, Map.of(), productDir, "replace_gen", i + 1, 1, refs);
+                        model, prompt, Map.of(), productDir, "replace_gen", i + 1, 1, refs);
 
                 // 复制到替换图目录
                 Path outputDir = Paths.get(productDir, "替换图");
