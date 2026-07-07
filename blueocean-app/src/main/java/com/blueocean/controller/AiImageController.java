@@ -416,6 +416,7 @@ public class AiImageController {
     @PostMapping("/generate-white-bg")
     public ResponseEntity<Map<String, Object>> generateWhiteBg(@RequestBody Map<String, Object> request) {
         String productDir = (String) request.get("productDir");
+        boolean force = Boolean.TRUE.equals(request.get("force"));
         if (productDir == null) {
             return ResponseEntity.badRequest().body(Map.of("success", false, "error", "缺少 productDir"));
         }
@@ -424,7 +425,7 @@ public class AiImageController {
 
         // 检查已存在的白底图
         Path whiteBgDir = Paths.get(productDir, "白底图");
-        if (Files.exists(whiteBgDir)) {
+        if (!force && Files.exists(whiteBgDir)) {
             try (var files = Files.list(whiteBgDir)) {
                 files.filter(f -> {
                     String n = f.toString().toLowerCase();
@@ -500,6 +501,26 @@ public class AiImageController {
                 } catch (IOException ignored) {
                 }
             }
+        }
+        return ResponseEntity.ok(Map.of("success", true, "images", images));
+    }
+
+    @GetMapping("/list-replace-images")
+    public ResponseEntity<Map<String, Object>> listReplaceImages(@RequestParam String productDir) {
+        List<Map<String, Object>> images = new ArrayList<>();
+        Path replaceDir = Paths.get(productDir, "替换图");
+        if (Files.exists(replaceDir)) {
+            try (var files = Files.list(replaceDir)) {
+                files.filter(f -> {
+                    String n = f.toString().toLowerCase();
+                    return n.endsWith(".jpg") || n.endsWith(".png");
+                }).sorted().forEach(f -> {
+                    Map<String, Object> item = new LinkedHashMap<>();
+                    item.put("path", f.toString());
+                    item.put("name", f.getFileName().toString());
+                    images.add(item);
+                });
+            } catch (IOException ignored) {}
         }
         return ResponseEntity.ok(Map.of("success", true, "images", images));
     }

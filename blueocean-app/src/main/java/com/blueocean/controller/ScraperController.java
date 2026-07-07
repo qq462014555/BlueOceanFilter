@@ -19,6 +19,10 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -110,6 +114,8 @@ public class ScraperController {
 
     @GetMapping("/scrape")
     public ResponseEntity<?> scrapeSingle(@RequestParam String url) {
+        // 确保今日采集目录存在
+        ensureTodayLinkDir();
         try {
             LinkEntry link = new LinkEntry("", url);
             // 单链接也设置进度回调，将日志推送到 SSE 控制台
@@ -299,6 +305,28 @@ public class ScraperController {
             emitComplete();
             running = false;
             productScraper.setProgressCallback(null);
+        }
+    }
+
+    /**
+     * 确保今日采集目录存在（没有就创建）
+     */
+    private void ensureTodayLinkDir() {
+        try {
+            File today = com.blueocean.scraper.LinkFileReader.findTodayLinkFile();
+            if (today != null) return; // 今天已有目录
+        } catch (Exception ignored) {}
+        // 创建今日目录
+        String now = java.time.LocalDateTime.now().format(
+                java.time.format.DateTimeFormatter.ofPattern("yyyy年MM月dd日HH时mm分"));
+        Path dir = Paths.get(RPA_BASE_DIR, now + "_1688链接");
+        try {
+            Files.createDirectories(dir);
+            Path linkFile = dir.resolve(now + "_链接.txt");
+            Files.write(linkFile, java.util.Collections.singletonList(""));
+            log.info("创建采集目录: {}", dir);
+        } catch (IOException e) {
+            log.error("创建采集目录失败", e);
         }
     }
 }

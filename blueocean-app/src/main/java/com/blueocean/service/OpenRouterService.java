@@ -80,11 +80,17 @@ public class  OpenRouterService {
      */
     private HttpClient getActiveHttpClient() {
         if (proxiedClient == null) {
-            log.info("🌐 未配置代理，直连");
             return directClient;
         }
-        log.info("🌐 使用代理 {}:{}", proxyHost, proxyPort);
-        return proxiedClient;
+        // 检测代理端口是否有效
+        try (java.net.Socket s = new java.net.Socket()) {
+            s.connect(new InetSocketAddress(proxyHost, proxyPort), 1000);
+            log.info("🌐 代理可用 {}:{}", proxyHost, proxyPort);
+            return proxiedClient;
+        } catch (Exception e) {
+            log.warn("🌐 代理不可用 ({}:{})，已切直连", proxyHost, proxyPort);
+            return directClient;
+        }
     }
 
     /**

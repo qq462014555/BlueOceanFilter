@@ -133,16 +133,77 @@ let _aiRedrawAnalysis = {};
 let _aiReplaceImages = [];
 let _aiReplacePrompts = [];
 let _aiReplaceResults = [];
+let _aiGenTimer = null;
+let _aiGenSeconds = 0;
 const _aiPlatformNames = { taobao: '淘宝', douyin: '抖音', shopee: '虾皮' };
 
+// 多商品独立缓存
+let _analysisCache = {};
+let _promptsCache = {};
+let _replaceCache = {};
+
+function saveCurrentToCache() {
+    const d = _aiRedrawProductDir;
+    if (!d) return;
+    _analysisCache[d] = JSON.parse(JSON.stringify(_aiRedrawAnalysis));
+    if (_aiRedrawPrompts[d]) _promptsCache[d] = JSON.parse(JSON.stringify(_aiRedrawPrompts[d]));
+    _replaceCache[d] = {
+        images: [..._aiReplaceImages],
+        prompts: [..._aiReplacePrompts],
+        results: JSON.parse(JSON.stringify(_aiReplaceResults))
+    };
+}
+
+function loadFromCache(d) {
+    if (_analysisCache[d]) _aiRedrawAnalysis = JSON.parse(JSON.stringify(_analysisCache[d]));
+    else _aiRedrawAnalysis = {};
+    if (_promptsCache[d]) _aiRedrawPrompts[d] = JSON.parse(JSON.stringify(_promptsCache[d]));
+    else _aiRedrawPrompts[d] = {};
+    if (_replaceCache[d]) {
+        _aiReplaceImages = [..._replaceCache[d].images];
+        _aiReplacePrompts = [..._replaceCache[d].prompts];
+        _aiReplaceResults = JSON.parse(JSON.stringify(_replaceCache[d].results));
+    } else {
+        _aiReplaceImages = []; _aiReplacePrompts = []; _aiReplaceResults = [];
+    }
+}
+
 function openAiRedrawModal(productDir) {
+    // 保存当前商品状态
+    saveCurrentToCache();
+    // 切换到新商品
     _aiRedrawProductDir = productDir;
+    loadFromCache(productDir);
+
+    // 渲染替换图
+    const rg = document.getElementById('aiReplaceGrid');
+    if (rg) {
+        if (_aiReplaceImages.length > 0) {
+            renderReplaceGrid();
+        } else {
+            rg.innerHTML = '<div class="img-item"><div class="img-placeholder" onclick="openReplaceUpload(this)"><div class="placeholder-icon">+</div><div class="placeholder-text">添加图</div></div></div>';
+        }
+    }
+    document.querySelectorAll('.ai-replace-results').forEach(el => el.remove());
+
     document.getElementById('aiRedrawModal').classList.add('active');
     loadAiPrompts();
-    // 切换到自定义生成主图标签
     const genTab = document.querySelector('#aiTabBar .ai-tab[data-tab="generate"]');
     if (genTab) genTab.click();
-    // 自动开始 AI 分析
+
+    // 恢复替换结果（优先从缓存，否则从文件加载）
+    if (_aiReplaceResults.length > 0) {
+        showReplaceResults();
+    } else {
+        loadExistingReplaceResults(productDir);
+    }
+
+    // 有缓存直接渲染，不重新请求
+    if (Object.keys(_aiRedrawAnalysis).length > 0) {
+        renderAiAnalysis(_aiRedrawAnalysis);
+        renderAiPromptGrid();
+        return;
+    }
     autoGeneratePrompts(productDir);
 }
 
@@ -260,8 +321,6 @@ async function optimizePrompt(btn) {
 }
 
 // AI 分析
-let _aiGenTimer = null;
-let _aiGenSeconds = 0;
 
 function showAiLoading() {
     stopAiLoading(); // 清除旧计时器
@@ -316,6 +375,7 @@ async function autoGeneratePrompts(productDir, forceNew) {
                 }
                 renderAiPromptGrid();
                 loadWhiteBgImages(productDir);
+                saveCurrentToCache();
             }
         }
     } catch (e) {
@@ -339,9 +399,54 @@ async function autoGeneratePrompts(productDir, forceNew) {
 }
 
 // 白底图
+async function regenerateWhiteBg() {
+    if (!_aiRedrawProductDir) return;
+    showToast('⏳ 重新生成白底图...', 'info');
+    try {
+        const resp = await fetch('/api/ai-image/generate-white-bg', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ productDir: _aiRedrawProductDir, force: true })
+        });
+        if (resp.ok) {
+            const data = await resp.json();
+            // 移除旧的并重新显示
+            const old = document.querySelector('.ai-whitebg-grid');
+            if (old) old.remove();
+            if (data.images && data.images.length > 0) {
+                const section = document.getElementById('aiAnalysisSection');
+                if (!section) return;
+                const galleryUrls = data.images.map(img => '/api/ai-image/image-file?path=' + encodeURIComponent(img.path));
+                let html = '<div class="ai-whitebg-grid" style="margin-top:12px;padding-top:12px;border-top:1px solid #d6e4ff;">';
+                html += '<div style="font-size:12px;font-weight:600;color:#1d39c4;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">';
+                html += '<span>⬜ 白底图 (AI 生成)</span>';
+                html += '<button class="btn-ai-refresh" onclick="regenerateWhiteBg()" style="font-size:11px;padding:2px 10px;">🔄 重新生成</button>';
+                html += '</div><div style="display:flex;gap:8px;flex-wrap:wrap;">';
+                data.images.forEach((img, idx) => {
+                    const imgUrl = '/api/ai-image/image-file?path=' + encodeURIComponent(img.path);
+                    html += '<div style="text-align:center;"><img src="' + imgUrl + '" style="width:100px;height:100px;object-fit:cover;border-radius:6px;border:1px solid #e0e0e0;cursor:pointer;" onclick="showModal(\'' + imgUrl + '\')"><div style="font-size:10px;color:#999;margin-top:2px;">' + img.name + '</div></div>';
+                });
+                html += '</div></div>';
+                section.insertAdjacentHTML('afterend', html);
+                showToast('✅ 白底图已重新生成', 'success');
+            }
+        }
+    } catch (e) {
+        showToast('⚠️ 重新生成失败: ' + e.message, 'error');
+    }
+}
+
 async function loadWhiteBgImages(productDir) {
     if (!productDir) return;
-    showToast('⏳ 正在获取/生成白底图...', 'info');
+    // 显示加载中
+    const sec = document.getElementById('aiAnalysisSection');
+    let loadingEl = null;
+    if (sec) {
+        loadingEl = document.createElement('div');
+        loadingEl.className = 'ai-whitebg-grid';
+        loadingEl.innerHTML = '<div style="margin-top:12px;padding-top:12px;border-top:1px solid #d6e4ff;"><div style="font-size:12px;font-weight:600;color:#1d39c4;margin-bottom:8px;">⬜ 白底图</div><div style="text-align:center;padding:15px;color:#999;"><span class="spinner" style="display:inline-block;"></span><div style="margin-top:8px;font-size:12px;">正在生成白底图...</div></div></div>';
+        sec.insertAdjacentHTML('afterend', loadingEl.outerHTML);
+    }
     try {
         const resp = await fetch('/api/ai-image/generate-white-bg', {
             method: 'POST',
@@ -353,12 +458,14 @@ async function loadWhiteBgImages(productDir) {
         if (!data.success || !data.images || data.images.length === 0) return;
         const analysisSection = document.getElementById('aiAnalysisSection');
         if (!analysisSection) return;
-        const old = analysisSection.querySelector('.ai-whitebg-grid');
-        if (old) old.remove();
+        document.querySelectorAll('.ai-whitebg-grid').forEach(el => el.remove());
         // 构建画廊
         const galleryUrls = data.images.map(img => '/api/ai-image/image-file?path=' + encodeURIComponent(img.path));
         let html = '<div class="ai-whitebg-grid" style="margin-top:12px;padding-top:12px;border-top:1px solid #d6e4ff;">';
-        html += '<div style="font-size:12px;font-weight:600;color:#1d39c4;margin-bottom:8px;">⬜ 白底图' + (data.fromCache ? ' (已存在)' : ' (AI 生成)') + '</div>';
+        html += '<div style="font-size:12px;font-weight:600;color:#1d39c4;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">';
+        html += '<span>⬜ 白底图' + (data.fromCache ? ' (已存在)' : ' (AI 生成)') + '</span>';
+        html += '<button class="btn-ai-refresh" onclick="regenerateWhiteBg()" style="font-size:11px;padding:2px 10px;">🔄 重新生成</button>';
+        html += '</div>';
         html += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
         data.images.forEach((img, idx) => {
             const imgUrl = galleryUrls[idx];
@@ -443,6 +550,25 @@ async function generateAiImages() {
 
 // 替换图函数
 let _replacePlaceholderEl = null;
+
+// 从文件加载已有的替换结果
+async function loadExistingReplaceResults(productDir) {
+    if (!productDir) return;
+    try {
+        const resp = await fetch('/api/ai-image/list-replace-images?productDir=' + encodeURIComponent(productDir));
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (!data.success || !data.images || data.images.length === 0) return;
+        _aiReplaceResults = data.images.map((img, i) => ({
+            key: '替换图' + (i + 1),
+            path: img.path,
+            success: true
+        }));
+        showReplaceResults();
+    } catch (e) {
+        console.error('加载已有替换结果失败', e);
+    }
+}
 
 function openReplaceUpload(el) {
     _replacePlaceholderEl = el;
