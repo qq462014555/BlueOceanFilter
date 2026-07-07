@@ -110,6 +110,44 @@ public class  OpenRouterService {
     /**
      * 生成图片（支持自定义参考图）
      */
+    /**
+     * 直接用原始提示词生成图片（不包装 buildFullPrompt）
+     */
+    public String generateImageRaw(String model, String rawPrompt, String productDir, String platform, int imageIndex, int n, List<String> refImages) {
+        try {
+            boolean isImage2 = model != null && model.toLowerCase().contains("gpt-image");
+            String jsonBody;
+            String endpoint;
+
+            if (isImage2) {
+                jsonBody = buildImage2RequestBody(model, rawPrompt, productDir, n);
+                if (refImages != null && !refImages.isEmpty()) {
+                    jsonBody = addRefsToImage2Body(jsonBody, refImages);
+                }
+                endpoint = OPENROUTER_IMAGES_API;
+            } else {
+                jsonBody = buildImageRequestBody(model, rawPrompt, productDir, n);
+                if (refImages != null && !refImages.isEmpty()) {
+                    jsonBody = addRefsToResponsesBody(jsonBody, refImages);
+                }
+                endpoint = OPENROUTER_RESPONSES_API;
+            }
+
+            log.info("调用 OpenRouter 生成图片(raw): model={}, endpoint={}, n={}", model, endpoint, n);
+
+            List<String> imageUrls = executeImageRequestWithRetry(jsonBody, endpoint);
+            if (imageUrls.isEmpty()) {
+                throw new RuntimeException("生成图片失败，已重试10次");
+            }
+
+            return downloadAllImages(imageUrls, productDir, platform, imageIndex);
+
+        } catch (Exception e) {
+            log.error("生成图片失败", e);
+            throw new RuntimeException("生成图片失败: " + e.getMessage(), e);
+        }
+    }
+
     public String generateImageWithRefs(String model, String prompt, Map<String, String> allPrompts, String productDir, String platform, int imageIndex, int n, List<String> refImages) {
         try {
             String fullPrompt = buildFullPrompt(prompt, allPrompts, imageIndex, n);
@@ -790,13 +828,19 @@ public class  OpenRouterService {
             // 确定保存路径
             Path saveDir;
             if (productDir != null && !productDir.isEmpty()) {
-                saveDir = Paths.get(productDir, "AI重绘图", platform);
+                if (platform != null && platform.contains("whitebg")) {
+                    saveDir = Paths.get(productDir, "白底图");
+                } else {
+                    saveDir = Paths.get(productDir, "AI重绘图", platform);
+                }
             } else {
                 saveDir = Paths.get(IMAGE_OUTPUT_DIR, platform);
             }
             Files.createDirectories(saveDir);
 
-            String prefix = platform != null && platform.contains("replace") ? "替换图" : "主图";
+            String prefix = "主图";
+            if (platform != null && platform.contains("replace")) prefix = "替换图";
+            else if (platform != null && platform.contains("whitebg")) prefix = "白底图";
             String fileName = String.format(prefix + "_%02d.jpg", imageIndex);
             Path targetPath = saveDir.resolve(fileName);
 

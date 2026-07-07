@@ -456,20 +456,40 @@ public class AiImageController {
             // 截断到3张
             if (refImages.size() > 3) refImages = new ArrayList<>(refImages.subList(0, 3));
 
-            String prompt = "生成该产品的白底图，纯白色背景，产品完整展示，不同角度拍摄，共3张分别从正面45度、正侧面、正上方俯视拍摄，产品细节清晰可见，无阴影，专业电商白底图风格";
+            // 计算已有白底图数量，从下一个编号开始追加
+            int nextIdx = 1;
+            try {
+                if (Files.exists(whiteBgDir)) {
+                    long existingCount = Files.list(whiteBgDir)
+                        .filter(f -> f.toString().toLowerCase().endsWith(".jpg"))
+                        .count();
+                    if (existingCount > 0) nextIdx = (int) existingCount + 1;
+                }
+            } catch (Exception ignored) {}
 
-            // 直接生成并保存到白底图目录（返回文件路径列表）
-            Files.createDirectories(whiteBgDir);
-            List<String> savedPaths = dashScopeClient.generateImages(prompt, refImages.isEmpty() ? null : refImages, 3, whiteBgDir.toString());
-
-            for (String path : savedPaths) {
-                Path filePath = Paths.get(path);
-                Map<String, Object> item = new LinkedHashMap<>();
-                item.put("path", path);
-                item.put("name", filePath.getFileName().toString());
-                images.add(item);
+            // 一次性生成2张图，n=2
+            String prompt = "生成2张产品白底图。第1张是45°斜前方单一视角，只展示产品正面；第2张是正面、侧面、背面三个视角横向排列的组合图。两张都只保留产品自身Logo，禁止添加任何文字、文案、价格、水印、装饰。白底淡影。";
+            String genPath = openRouterService.generateImageRaw(
+                    "openai/gpt-image-2", prompt, productDir, "whitebg_temp", nextIdx, 2,
+                    refImages.isEmpty() ? null : refImages);
+            // 处理生成的图片
+            if (genPath != null) {
+                Path file = Paths.get(genPath);
+                if (Files.exists(file)) {
+                    Map<String, Object> item = new LinkedHashMap<>();
+                    item.put("path", file.toString());
+                    item.put("name", "白底图_正面45度.jpg");
+                    images.add(item);
+                }
+                // 第二张图（nextIdx+1）
+                Path file2 = Paths.get(genPath).resolveSibling(String.format("白底图_%02d.jpg", nextIdx + 1));
+                if (Files.exists(file2)) {
+                    Map<String, Object> item2 = new LinkedHashMap<>();
+                    item2.put("path", file2.toString());
+                    item2.put("name", "白底图_多角度组合.jpg");
+                    images.add(item2);
+                }
             }
-            log.info("白底图生成完成: {} 张", images.size());
         } catch (Exception e) {
             log.error("生成白底图失败", e);
             return ResponseEntity.ok(Map.of("success", false, "error", "生成失败: " + e.getMessage(), "images", images));
@@ -505,6 +525,26 @@ public class AiImageController {
         return ResponseEntity.ok(Map.of("success", true, "images", images));
     }
 
+    @GetMapping("/list-whitebg-images")
+    public ResponseEntity<Map<String, Object>> listWhiteBgImages(@RequestParam String productDir) {
+        List<Map<String, Object>> images = new ArrayList<>();
+        Path dir = Paths.get(productDir, "白底图");
+        if (Files.exists(dir)) {
+            try (var files = Files.list(dir)) {
+                files.filter(f -> {
+                    String n = f.toString().toLowerCase();
+                    return n.endsWith(".jpg") || n.endsWith(".png");
+                }).sorted().forEach(f -> {
+                    Map<String, Object> item = new LinkedHashMap<>();
+                    item.put("path", f.toString());
+                    item.put("name", f.getFileName().toString());
+                    images.add(item);
+                });
+            } catch (IOException ignored) {}
+        }
+        return ResponseEntity.ok(Map.of("success", true, "images", images));
+    }
+
     @GetMapping("/list-replace-images")
     public ResponseEntity<Map<String, Object>> listReplaceImages(@RequestParam String productDir) {
         List<Map<String, Object>> images = new ArrayList<>();
@@ -523,6 +563,26 @@ public class AiImageController {
             } catch (IOException ignored) {}
         }
         return ResponseEntity.ok(Map.of("success", true, "images", images));
+    }
+
+    @PostMapping("/delete-file")
+    public ResponseEntity<Map<String, Object>> deleteFile(@RequestBody Map<String, Object> request) {
+        String path = (String) request.get("path");
+        log.info("收到删除请求: {}", path);
+        if (path == null) return ResponseEntity.badRequest().body(Map.of("success", false, "error", "缺少 path"));
+        try {
+            Path file = Paths.get(path);
+            if (Files.exists(file)) {
+                Files.delete(file);
+                log.info("删除成功: {}", file);
+                return ResponseEntity.ok(Map.of("success", true));
+            }
+            log.warn("文件不存在: {}", file);
+            return ResponseEntity.ok(Map.of("success", false, "error", "文件不存在"));
+        } catch (Exception e) {
+            log.error("删除文件失败: {}", e.getMessage());
+            return ResponseEntity.ok(Map.of("success", false, "error", e.getMessage()));
+        }
     }
 
     // ==================== 替换图 ====================

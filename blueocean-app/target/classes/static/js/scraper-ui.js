@@ -185,6 +185,8 @@ function openAiRedrawModal(productDir) {
         }
     }
     document.querySelectorAll('.ai-replace-results').forEach(el => el.remove());
+    document.querySelectorAll('.ai-whitebg-grid').forEach(el => el.remove());
+    _aiWhiteBgLoading = false;
 
     document.getElementById('aiRedrawModal').classList.add('active');
     loadAiPrompts();
@@ -202,6 +204,7 @@ function openAiRedrawModal(productDir) {
     if (Object.keys(_aiRedrawAnalysis).length > 0) {
         renderAiAnalysis(_aiRedrawAnalysis);
         renderAiPromptGrid();
+        loadWhiteBgImages(productDir);
         return;
     }
     autoGeneratePrompts(productDir);
@@ -400,52 +403,104 @@ async function autoGeneratePrompts(productDir, forceNew) {
 
 // 白底图
 async function regenerateWhiteBg() {
-    if (!_aiRedrawProductDir) return;
-    showToast('⏳ 重新生成白底图...', 'info');
-    try {
-        const resp = await fetch('/api/ai-image/generate-white-bg', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ productDir: _aiRedrawProductDir, force: true })
-        });
-        if (resp.ok) {
-            const data = await resp.json();
-            // 移除旧的并重新显示
-            const old = document.querySelector('.ai-whitebg-grid');
-            if (old) old.remove();
-            if (data.images && data.images.length > 0) {
-                const section = document.getElementById('aiAnalysisSection');
-                if (!section) return;
-                const galleryUrls = data.images.map(img => '/api/ai-image/image-file?path=' + encodeURIComponent(img.path));
-                let html = '<div class="ai-whitebg-grid" style="margin-top:12px;padding-top:12px;border-top:1px solid #d6e4ff;">';
-                html += '<div style="font-size:12px;font-weight:600;color:#1d39c4;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">';
-                html += '<span>⬜ 白底图 (AI 生成)</span>';
-                html += '<button class="btn-ai-refresh" onclick="regenerateWhiteBg()" style="font-size:11px;padding:2px 10px;">🔄 重新生成</button>';
-                html += '</div><div style="display:flex;gap:8px;flex-wrap:wrap;">';
-                data.images.forEach((img, idx) => {
-                    const imgUrl = '/api/ai-image/image-file?path=' + encodeURIComponent(img.path);
-                    html += '<div style="text-align:center;"><img src="' + imgUrl + '" style="width:100px;height:100px;object-fit:cover;border-radius:6px;border:1px solid #e0e0e0;cursor:pointer;" onclick="showModal(\'' + imgUrl + '\')"><div style="font-size:10px;color:#999;margin-top:2px;">' + img.name + '</div></div>';
-                });
-                html += '</div></div>';
-                section.insertAdjacentHTML('afterend', html);
-                showToast('✅ 白底图已重新生成', 'success');
-            }
-        }
-    } catch (e) {
-        showToast('⚠️ 重新生成失败: ' + e.message, 'error');
+    if (!_aiRedrawProductDir || _aiWhiteBgLoading) return;
+    _aiWhiteBgLoading = true;
+    // 在现有网格下方追加加载指示器
+    const grid = document.querySelector('.ai-whitebg-grid');
+    if (grid) {
+        const loadingBar = document.createElement('div');
+        loadingBar.id = 'whiteBgLoadingBar';
+        loadingBar.style.cssText = 'text-align:center;padding:10px;color:#999;font-size:12px;border-top:1px solid #eee;margin-top:8px;';
+        loadingBar.innerHTML = '<span class="spinner" style="display:inline-block;width:16px;height:16px;border-width:2px;vertical-align:middle;"></span> <span id="whiteBgTimer2" style="vertical-align:middle;">正在重新生成...</span>';
+        grid.appendChild(loadingBar);
     }
+    let _timer = 0;
+    const _interval = setInterval(() => {
+        _timer++;
+        const t = document.getElementById('whiteBgTimer2');
+        if (t) t.textContent = '正在重新生成(' + _timer + 's)...';
+        if (_timer % 3 === 0) pollWhiteBgImages();
+    }, 1000);
+    fetch('/api/ai-image/generate-white-bg', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productDir: _aiRedrawProductDir, force: true })
+    }).then(async resp => {
+        if (resp.ok) {
+            clearInterval(_interval);
+            // 从磁盘重新获取白底图列表
+            try {
+                const listResp = await fetch('/api/ai-image/list-whitebg-images?productDir=' + encodeURIComponent(_aiRedrawProductDir));
+                if (listResp.ok) {
+                    const listData = await listResp.json();
+                    _aiWhiteBgLoading = false;
+                    renderWhiteBgGrid(listData.images || []);
+                }
+            } catch (e) {
+                _aiWhiteBgLoading = false;
+                renderWhiteBgGrid([]);
+            }
+            showToast('✅ 白底图已重新生成', 'success');
+        }
+    }).catch(e => {
+        clearInterval(_interval);
+        _aiWhiteBgLoading = false;
+        showToast('⚠️ 重新生成失败: ' + e.message, 'error');
+    });
 }
 
+// 轮询白底图目录
+async function pollWhiteBgImages() {
+    if (!_aiRedrawProductDir) return;
+    try {
+        const resp = await fetch('/api/ai-image/list-whitebg-images?productDir=' + encodeURIComponent(_aiRedrawProductDir));
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (data.images && data.images.length > 0) {
+            renderWhiteBgGrid(data.images);
+        }
+    } catch (e) {}
+}
+
+function renderWhiteBgGrid(images) {
+    const section = document.getElementById('aiAnalysisSection');
+    if (!section || !images.length) return;
+    // 正在重新生成中时，不渲染（等完成后再替换）
+    if (_aiWhiteBgLoading) return;
+    document.querySelectorAll('.ai-whitebg-grid').forEach(el => el.remove());
+    const galleryUrls = images.map(img => '/api/ai-image/image-file?path=' + encodeURIComponent(img.path));
+    let html = '<div class="ai-whitebg-grid" style="margin-top:12px;padding-top:12px;border-top:1px solid #d6e4ff;">';
+    html += '<div style="font-size:12px;font-weight:600;color:#1d39c4;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">';
+    html += '<span>⬜ 白底图 <span class="whitebg-count">' + images.length + '/3</span></span>';
+    html += '<button class="btn-ai-refresh" onclick="regenerateWhiteBg()" style="font-size:11px;padding:2px 10px;">🔄 重新生成</button>';
+    html += '</div><div class="img-container" style="display:flex;gap:8px;flex-wrap:wrap;">';
+    images.forEach((img, idx) => {
+        const imgUrl = '/api/ai-image/image-file?path=' + encodeURIComponent(img.path);
+        html += '<div style="text-align:center;"><img src="' + imgUrl + '&t=' + Date.now() + '" style="width:100px;height:100px;object-fit:cover;border-radius:6px;border:1px solid #e0e0e0;cursor:pointer;" onclick="showModal(\'' + imgUrl + '\')"><div style="font-size:10px;color:#999;margin-top:2px;">' + img.name + '</div></div>';
+    });
+    html += '</div></div>';
+    section.insertAdjacentHTML('afterend', html);
+}
+
+let _aiWhiteBgLoading = false;
+let _aiWhiteBgTimer = null;
+let _aiWhiteBgSeconds = 0;
+
 async function loadWhiteBgImages(productDir) {
-    if (!productDir) return;
-    // 显示加载中
+    if (!productDir || _aiWhiteBgLoading) return;
+    _aiWhiteBgLoading = true;
     const sec = document.getElementById('aiAnalysisSection');
-    let loadingEl = null;
-    if (sec) {
-        loadingEl = document.createElement('div');
+    if (!document.querySelector('.ai-whitebg-grid')) {
+        const loadingEl = document.createElement('div');
         loadingEl.className = 'ai-whitebg-grid';
-        loadingEl.innerHTML = '<div style="margin-top:12px;padding-top:12px;border-top:1px solid #d6e4ff;"><div style="font-size:12px;font-weight:600;color:#1d39c4;margin-bottom:8px;">⬜ 白底图</div><div style="text-align:center;padding:15px;color:#999;"><span class="spinner" style="display:inline-block;"></span><div style="margin-top:8px;font-size:12px;">正在生成白底图...</div></div></div>';
-        sec.insertAdjacentHTML('afterend', loadingEl.outerHTML);
+        loadingEl.innerHTML = '<div style="margin-top:12px;padding-top:12px;border-top:1px solid #d6e4ff;"><div style="font-size:12px;font-weight:600;color:#1d39c4;margin-bottom:8px;">⬜ 白底图</div><div style="text-align:center;padding:15px;color:#999;"><span class="spinner" style="display:inline-block;"></span><div style="margin-top:8px;font-size:12px;">正在生成白底图... <span id="whiteBgTimer">0s</span></div></div></div>';
+        if (sec) sec.insertAdjacentHTML('afterend', loadingEl.outerHTML);
+        _aiWhiteBgSeconds = 0;
+        _aiWhiteBgTimer = setInterval(() => {
+            _aiWhiteBgSeconds++;
+            const t = document.getElementById('whiteBgTimer');
+            if (t) t.textContent = _aiWhiteBgSeconds + 's';
+        }, 1000);
     }
     try {
         const resp = await fetch('/api/ai-image/generate-white-bg', {
@@ -478,6 +533,9 @@ async function loadWhiteBgImages(productDir) {
     } catch (e) {
         console.error('加载白底图失败', e);
         showToast('⚠️ 白底图获取失败: ' + e.message, 'error');
+    } finally {
+        _aiWhiteBgLoading = false;
+        if (_aiWhiteBgTimer) { clearInterval(_aiWhiteBgTimer); _aiWhiteBgTimer = null; }
     }
 }
 
@@ -645,6 +703,11 @@ async function generateReplaceImages() {
     // 校验追加提示词是否全部填写
     const emptyPrompts = _aiReplacePrompts.some(p => !p || !p.trim());
     if (emptyPrompts) { showToast('⚠️ 请填写所有场景图的追加提示词（必填）', 'error'); return; }
+    // 检查白底图是否存在（DOM 中有白底图网格即存在）
+    if (!document.querySelector('.ai-whitebg-grid')) {
+        showToast('⚠️ 请先生成白底图（点击刷新生成）', 'error');
+        return;
+    }
     const btn = document.getElementById('aiReplaceBtn');
     const status = document.getElementById('aiReplaceStatus');
     btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> 生成中...';
@@ -669,7 +732,8 @@ async function generateReplaceImages() {
         status.textContent = '❌ ' + e.message;
     }
     btn.disabled = false; btn.textContent = '🚀 生成替换图';
-n
+}
+
 // 重新生成单张替换图
 async function regenerateReplaceImage(idx) {
     if (!_aiReplaceImages[idx]) { showToast('⚠️ 缺少原图数据', 'error'); return; }
@@ -705,7 +769,13 @@ function showReplaceResults() {
     let rh = '<div class=\"ai-replace-results\" style=\"width:100%;border-top:1px solid #eee;padding-top:12px;margin-top:12px;\"><div style=\"font-size:13px;font-weight:600;margin-bottom:8px;\">🖼️ 替换结果</div><div style=\"display:flex;gap:10px;flex-wrap:wrap;\">';
     _aiReplaceResults.forEach((r, ri) => {
         const u = '/api/ai-image/image-file?path=' + encodeURIComponent(r.path);
-        rh += '<div style=\"text-align:center;\"><img src=\"' + u + '&t=' + Date.now() + '\" style=\"width:100px;height:100px;object-fit:cover;border-radius:6px;border:1px solid #e0e0e0;cursor:pointer;\" onclick=\"showModal(this.src)\"><div style=\"font-size:10px;color:#999;margin-top:2px;\">' + r.key + '</div><button onclick=\"regenerateReplaceImage(' + ri + ')\" style=\"margin-top:4px;padding:2px 8px;border:1px solid #667eea;border-radius:4px;font-size:10px;background:#fff;color:#667eea;cursor:pointer;\">🔄 重新生成</button></div>';
+        rh += '<div style=\"text-align:center;\">';
+        rh += '<img src=\"' + u + '&t=' + Date.now() + '\" style=\"width:100px;height:100px;object-fit:cover;border-radius:6px;border:1px solid #e0e0e0;cursor:pointer;\" onclick=\"showModal(this.src)\">';
+        rh += '<div style=\"font-size:10px;color:#999;margin-top:2px;\">' + r.key + '</div>';
+        rh += '<div style=\"margin-top:4px;display:flex;gap:4px;justify-content:center;\">';
+        rh += '<button onclick=\"regenerateReplaceImage(' + ri + ')\" style=\"padding:2px 8px;border:1px solid #667eea;border-radius:4px;font-size:10px;background:#fff;color:#667eea;cursor:pointer;\">🔄 重新生成</button>';
+        rh += '<button onclick=\"deleteReplaceImage(' + ri + ',\'' + r.path + '\')\" style=\"padding:2px 8px;border:1px solid #ff4d4f;border-radius:4px;font-size:10px;background:#fff;color:#ff4d4f;cursor:pointer;\">🗑️ 删除</button>';
+        rh += '</div></div>';
     });
     rh += '</div></div>';
     const wrap = document.createElement('div');
@@ -713,6 +783,32 @@ function showReplaceResults() {
     wrap.innerHTML = rh;
     grid.parentElement.insertBefore(wrap, grid.nextSibling);
 }
+
+// 删除单张替换图
+async function deleteReplaceImage(idx, filePath) {
+    if (!confirm('确定删除该替换图吗？')) return;
+    try {
+        const resp = await fetch('/api/ai-image/delete-file', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: filePath })
+        });
+        if (resp.ok) {
+            const result = await resp.json();
+            if (result.success) {
+                _aiReplaceResults.splice(idx, 1);
+                showReplaceResults();
+                saveCurrentToCache();
+                showToast('✅ 已删除', 'success');
+            } else {
+                showToast('❌ 删除失败: ' + (result.error || '文件不存在'), 'error');
+            }
+        } else {
+            showToast('❌ 删除失败', 'error');
+        }
+    } catch (e) {
+        showToast('❌ ' + e.message, 'error');
+    }
 }
 
 // 标签切换
