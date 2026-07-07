@@ -132,6 +132,7 @@ let _aiRedrawPrompts = {};
 let _aiRedrawAnalysis = {};
 let _aiReplaceImages = [];
 let _aiReplacePrompts = [];
+let _aiReplaceResults = [];
 const _aiPlatformNames = { taobao: '淘宝', douyin: '抖音', shopee: '虾皮' };
 
 function openAiRedrawModal(productDir) {
@@ -494,7 +495,7 @@ function renderReplaceGrid() {
         html += '<div class="img-wrap"><img draggable="true" src="' + src + '" onclick="showModal(this.src)">';
         html += '<div class="img-label">' + (idx + 1) + '</div></div>';
         html += '<div class="img-actions-bar"><button class="action-btn btn-delete" onclick="removeReplaceImage(' + idx + ')">删除</button></div>';
-        html += '<input type="text" class="replace-prompt-input" data-idx="' + idx + '" placeholder="追加提示词（如：替换模特手上的物件）" value="' + escapeHtml(_aiReplacePrompts[idx] || '') + '" style="width:100%;margin-top:4px;padding:6px 8px;border:1px solid #d9d9d9;border-radius:4px;font-size:11px;outline:none;" onchange="updateReplacePrompt(' + idx + ', this.value)">';
+        html += '<input type="text" class="replace-prompt-input" data-idx="' + idx + '" placeholder="必填：输入替换要求（如：替换模特手上的物件）" value="' + escapeHtml(_aiReplacePrompts[idx] || '') + '" style="width:100%;margin-top:4px;padding:6px 8px;border:1px solid #ff4d4f;border-radius:4px;font-size:11px;outline:none;" onchange="updateReplacePrompt(' + idx + ', this.value)">';
         html += '</div>';
     });
     html += '<div class="img-item"><div class="img-placeholder" onclick="openReplaceUpload(this)">';
@@ -515,6 +516,9 @@ function removeReplaceImage(idx) {
 async function generateReplaceImages() {
     if (_aiReplaceImages.length === 0) { showToast('⚠️ 请先添加图片', 'error'); return; }
     if (!_aiRedrawProductDir) { showToast('⚠️ 缺少商品目录', 'error'); return; }
+    // 校验追加提示词是否全部填写
+    const emptyPrompts = _aiReplacePrompts.some(p => !p || !p.trim());
+    if (emptyPrompts) { showToast('⚠️ 请填写所有场景图的追加提示词（必填）', 'error'); return; }
     const btn = document.getElementById('aiReplaceBtn');
     const status = document.getElementById('aiReplaceStatus');
     btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> 生成中...';
@@ -529,23 +533,8 @@ async function generateReplaceImages() {
             status.textContent = '✅ ' + (data.succeeded || 0) + ' 成功, ❌ ' + (data.failed || 0) + ' 失败';
             // 显示预览
             if (data.results && data.results.length > 0) {
-                const old = document.querySelector('.ai-replace-previews');
-                if (old) old.remove();
-                const replaceGrid = document.getElementById('aiReplaceGrid');
-                if (!replaceGrid) return;
-                let rh = '<div style="width:100%;border-top:1px solid #eee;padding-top:12px;margin-top:12px;"><div style="font-size:13px;font-weight:600;margin-bottom:8px;">🖼️ 替换结果</div><div style="display:flex;gap:10px;flex-wrap:wrap;">';
-                data.results.forEach(r => {
-                    const u = '/api/ai-image/image-file?path=' + encodeURIComponent(r.path);
-                    rh += '<div style="text-align:center;"><img src="' + u + '" style="width:100px;height:100px;object-fit:cover;border-radius:6px;border:1px solid #e0e0e0;cursor:pointer;" onclick="showModal(this.src)"><div style="font-size:10px;color:#999;margin-top:2px;">' + r.key + '</div></div>';
-                });
-                rh += '</div></div>';
-                // 移除旧的预览
-                const old = replaceGrid.parentElement.querySelector('.ai-replace-results');
-                if (old) old.remove();
-                const wrap = document.createElement('div');
-                wrap.className = 'ai-replace-results';
-                wrap.innerHTML = rh;
-                replaceGrid.parentElement.insertBefore(wrap, replaceGrid.nextSibling);
+                _aiReplaceResults = data.results;
+                showReplaceResults();
             }
         } else {
             status.textContent = '❌ 请求失败';
@@ -554,6 +543,50 @@ async function generateReplaceImages() {
         status.textContent = '❌ ' + e.message;
     }
     btn.disabled = false; btn.textContent = '🚀 生成替换图';
+n
+// 重新生成单张替换图
+async function regenerateReplaceImage(idx) {
+    if (!_aiReplaceImages[idx]) { showToast('⚠️ 缺少原图数据', 'error'); return; }
+    showToast('⏳ 重新生成第' + (idx + 1) + '张...', 'info');
+    try {
+        const resp = await fetch('/api/ai-image/replace', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                productDir: _aiRedrawProductDir,
+                images: [_aiReplaceImages[idx]],
+                prompts: [_aiReplacePrompts[idx] || '""'],
+                model: document.getElementById('aiReplaceModelSelect').value
+            })
+        });
+        if (resp.ok) {
+            const data = await resp.json();
+            if (data.results && data.results.length > 0) {
+                _aiReplaceResults[idx] = data.results[0];
+                showReplaceResults();
+                showToast('✅ 第' + (idx + 1) + '张已重新生成', 'success');
+            }
+        }
+    } catch (e) {
+        showToast('❌ ' + e.message, 'error');
+    }
+}
+
+function showReplaceResults() {
+    const grid = document.getElementById('aiReplaceGrid');
+    if (!grid || !_aiReplaceResults.length) return;
+    const old = grid.parentElement.querySelector('.ai-replace-results');
+    if (old) old.remove();
+    let rh = '<div class=\"ai-replace-results\" style=\"width:100%;border-top:1px solid #eee;padding-top:12px;margin-top:12px;\"><div style=\"font-size:13px;font-weight:600;margin-bottom:8px;\">🖼️ 替换结果</div><div style=\"display:flex;gap:10px;flex-wrap:wrap;\">';
+    _aiReplaceResults.forEach((r, ri) => {
+        const u = '/api/ai-image/image-file?path=' + encodeURIComponent(r.path);
+        rh += '<div style=\"text-align:center;\"><img src=\"' + u + '&t=' + Date.now() + '\" style=\"width:100px;height:100px;object-fit:cover;border-radius:6px;border:1px solid #e0e0e0;cursor:pointer;\" onclick=\"showModal(this.src)\"><div style=\"font-size:10px;color:#999;margin-top:2px;\">' + r.key + '</div><button onclick=\"regenerateReplaceImage(' + ri + ')\" style=\"margin-top:4px;padding:2px 8px;border:1px solid #667eea;border-radius:4px;font-size:10px;background:#fff;color:#667eea;cursor:pointer;\">🔄 重新生成</button></div>';
+    });
+    rh += '</div></div>';
+    const wrap = document.createElement('div');
+    wrap.className = 'ai-replace-results';
+    wrap.innerHTML = rh;
+    grid.parentElement.insertBefore(wrap, grid.nextSibling);
+}
 }
 
 // 标签切换

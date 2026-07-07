@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
+import java.awt.image.BufferedImage;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -571,7 +572,14 @@ public class AiImageController {
                     Files.copy(tempPath, outPath, StandardCopyOption.REPLACE_EXISTING);
                 }
 
-                results.add(Map.of("key", "替换图" + (i + 1), "path", outPath.toString(), "success", true));
+                // 对比原图，检测是否替换成功
+                String similarWarning = checkImageSimilarity(outPath.toString(), userImg);
+                Map<String, Object> resultItem = new LinkedHashMap<>();
+                resultItem.put("key", "替换图" + (i + 1));
+                resultItem.put("path", outPath.toString());
+                resultItem.put("success", true);
+                if (similarWarning != null) resultItem.put("warning", similarWarning);
+                results.add(resultItem);
 
                 if (i < images.size() - 1) {
                     try { Thread.sleep(2000); } catch (InterruptedException ignored) {}
@@ -589,6 +597,62 @@ public class AiImageController {
     }
 
     // ==================== 数据持久化 ====================
+
+    /**
+     * 图片相似度检测，返回警告文字（null 表示正常）
+     */
+    private String checkImageSimilarity(String genPath, String originalImg) {
+        try {
+            // 原图可能是 base64，需要先保存
+            Path tempDir = Files.createTempDirectory("replace_cmp_");
+            Path origPath = tempDir.resolve("original.jpg");
+            if (originalImg.startsWith("data:image")) {
+                byte[] data = Base64.getDecoder().decode(originalImg.substring(originalImg.indexOf(',') + 1));
+                java.awt.image.BufferedImage rawImg = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(data));
+                if (rawImg != null) javax.imageio.ImageIO.write(rawImg, "jpg", origPath.toFile());
+                else Files.write(origPath, data);
+            }
+
+            // 读取两张图并缩小到8x8
+            java.awt.image.BufferedImage imgA = javax.imageio.ImageIO.read(new java.io.File(genPath));
+            java.awt.image.BufferedImage imgB = javax.imageio.ImageIO.read(origPath.toFile());
+            if (imgA == null || imgB == null) return null;
+
+            int size = 8;
+            java.awt.image.BufferedImage smallA = new java.awt.image.BufferedImage(size, size, BufferedImage.TYPE_INT_RGB);
+            java.awt.image.BufferedImage smallB = new java.awt.image.BufferedImage(size, size, BufferedImage.TYPE_INT_RGB);
+            java.awt.Graphics2D gA = smallA.createGraphics();
+            gA.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            gA.drawImage(imgA, 0, 0, size, size, null); gA.dispose();
+            java.awt.Graphics2D gB = smallB.createGraphics();
+            gB.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            gB.drawImage(imgB, 0, 0, size, size, null); gB.dispose();
+
+            // 计算像素差异
+            double diff = 0, count = 0;
+            for (int x = 0; x < size; x++) {
+                for (int y = 0; y < size; y++) {
+                    int c1 = smallA.getRGB(x, y) & 0xFF;
+                    int c2 = smallB.getRGB(x, y) & 0xFF;
+                    diff += Math.abs(c1 - c2);
+                    count++;
+                }
+            }
+            double similarity = 1 - (diff / (count * 255.0));
+
+            // 清理临时文件
+            try { Files.deleteIfExists(origPath); Files.deleteIfExists(tempDir); } catch (Exception ignored) {}
+
+            if (similarity > 0.85) {
+                int pct = (int) Math.round(similarity * 100);
+                log.warn("替换图与场景图相似度 {}%，可能替换失败", pct);
+                return "相似度过高(" + pct + "%)，可能未替换成功";
+            }
+        } catch (Exception e) {
+            log.warn("图片相似度检测失败: {}", e.getMessage());
+        }
+        return null;
+    }
 
     private Path getPromptFilePath() {
         // 保存在项目根目录

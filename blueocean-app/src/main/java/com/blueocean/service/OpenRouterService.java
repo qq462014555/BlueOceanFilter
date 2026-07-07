@@ -790,7 +790,8 @@ public class  OpenRouterService {
             }
             Files.createDirectories(saveDir);
 
-            String fileName = String.format("主图_%02d.jpg", imageIndex);
+            String prefix = platform != null && platform.contains("replace") ? "替换图" : "主图";
+            String fileName = String.format(prefix + "_%02d.jpg", imageIndex);
             Path targetPath = saveDir.resolve(fileName);
 
             // 如果是 base64 data URL，直接解码保存（二次写入，剥离元数据）
