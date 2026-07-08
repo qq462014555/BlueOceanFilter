@@ -205,6 +205,7 @@ function openAiRedrawModal(productDir) {
         renderAiAnalysis(_aiRedrawAnalysis);
         renderAiPromptGrid();
         loadWhiteBgImages(productDir);
+        loadGeneratedMainImages(productDir);
         return;
     }
     autoGeneratePrompts(productDir);
@@ -378,6 +379,7 @@ async function autoGeneratePrompts(productDir, forceNew) {
                 }
                 renderAiPromptGrid();
                 loadWhiteBgImages(productDir);
+                loadGeneratedMainImages(productDir);
                 saveCurrentToCache();
             }
         }
@@ -398,6 +400,31 @@ async function autoGeneratePrompts(productDir, forceNew) {
                 ag.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:20px;color:#ccc;font-size:13px;">分析完成，暂无数据</div>';
             }
         }
+    }
+}
+
+// 加载已生成的主图（AI重绘图）
+async function loadGeneratedMainImages(productDir) {
+    if (!productDir) return;
+    try {
+        const resp = await fetch('/api/ai-image/list-images?productDir=' + encodeURIComponent(productDir));
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (!data.images || data.images.length === 0) return;
+        const btnParent = document.getElementById('aiGenerateBtn') ? document.getElementById('aiGenerateBtn').parentElement : null;
+        if (!btnParent) return;
+        document.querySelectorAll('.ai-gen-main-grid').forEach(el => el.remove());
+        let html = '<div class="ai-gen-main-grid" style="border-top:1px solid #eee;padding-top:12px;margin-top:12px;">';
+        html += '<div style="font-size:12px;font-weight:600;color:#667eea;margin-bottom:8px;">🎨 已生成主图</div>';
+        html += '<div style="display:flex;gap:8px;flex-wrap:wrap;max-height:200px;overflow-y:auto;">';
+        data.images.forEach(img => {
+            const u = '/api/ai-image/image-file?path=' + encodeURIComponent(img.path);
+            html += '<div style="text-align:center;"><img src="' + u + '&t=' + Date.now() + '" style="width:80px;height:80px;object-fit:cover;border-radius:6px;border:1px solid #e0e0e0;cursor:pointer;" onclick="showModal(this.src)"><div style="font-size:9px;color:#999;margin-top:2px;">' + img.name + '</div></div>';
+        });
+        html += '</div></div>';
+        btnParent.insertAdjacentHTML('afterend', html);
+    } catch (e) {
+        console.error('加载已生成主图失败', e);
     }
 }
 
@@ -596,6 +623,21 @@ async function generateAiImages() {
         if (resp.ok) {
             const data = await resp.json();
             status.textContent = '✅ ' + (data.succeeded || 0) + '/' + (data.total || 0) + ' 成功';
+            if (data.results && data.results.length > 0) {
+                document.querySelectorAll('.ai-gen-previews').forEach(el => el.remove());
+                const btnParent = document.getElementById('aiGenerateBtn').parentElement;
+                if (btnParent) {
+                    document.querySelectorAll('.ai-gen-previews').forEach(el => el.remove());
+                    let ph = '<div class="ai-gen-previews" style="border-top:1px solid #eee;padding-top:12px;margin-top:12px;"><div style="font-size:13px;font-weight:600;margin-bottom:8px;">🖼️ 生成结果</div><div style="display:flex;gap:10px;flex-wrap:wrap;">';
+                    data.results.forEach(r => {
+                        const u = '/api/ai-image/image-file?path=' + encodeURIComponent(r.path);
+                        ph += '<div style="text-align:center;"><img src="' + u + '&t=' + Date.now() + '" style="width:100px;height:100px;object-fit:cover;border-radius:6px;border:1px solid #e0e0e0;cursor:pointer;" onclick="showModal(this.src)"><div style="font-size:10px;color:#999;margin-top:2px;">' + (r.key || '') + '</div></div>';
+                    });
+                    ph += '</div></div>';
+                    btnParent.insertAdjacentHTML('afterend', ph);
+                    setTimeout(() => { btnParent.scrollIntoView({behavior:'smooth', block:'nearest'}); }, 50);
+                }
+            }
         } else {
             status.textContent = '❌ 生成失败';
         }

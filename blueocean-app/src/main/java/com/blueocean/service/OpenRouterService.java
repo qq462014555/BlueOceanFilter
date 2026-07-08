@@ -843,9 +843,11 @@ public class  OpenRouterService {
             Files.createDirectories(saveDir);
 
             String prefix = "主图";
-            if (platform != null && platform.contains("replace")) prefix = "替换图";
-            else if (platform != null && platform.contains("whitebg")) prefix = "白底图";
-            String fileName = String.format(prefix + "_%02d.jpg", imageIndex);
+            String suffix = "";
+            if (platform != null && platform.contains("replace")) { prefix = "替换图"; }
+            else if (platform != null && platform.contains("whitebg")) { prefix = "白底图"; }
+            else { suffix = "_主图" + imageIndex; } // 标识对应的提示词编号
+            String fileName = String.format(prefix + "_%02d" + suffix + ".jpg", imageIndex);
             Path targetPath = saveDir.resolve(fileName);
 
             // 如果是 base64 data URL，直接解码保存（二次写入，剥离元数据）
