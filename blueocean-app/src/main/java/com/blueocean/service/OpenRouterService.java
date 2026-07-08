@@ -42,6 +42,10 @@ public class  OpenRouterService {
     private static final String OPENROUTER_API = "https://openrouter.ai/api/v1/chat/completions";
     private static final String OPENROUTER_RESPONSES_API = "https://openrouter.ai/api/v1/responses";
     private static final String OPENROUTER_IMAGES_API = "https://openrouter.ai/api/v1/images";
+    private static final String DEEPSEEK_API = "https://api.deepseek.com/v1/chat/completions";
+
+    @Value("${app.deepseek-api-key:}")
+    private String deepseekApiKey;
 
     // 图片保存根目录
     private static final String IMAGE_OUTPUT_DIR = "C:\\Users\\46201\\Documents\\无极RPA文件处理\\AI重绘图";
@@ -881,6 +885,68 @@ public class  OpenRouterService {
         } catch (Exception e) {
             throw new RuntimeException("保存图片失败: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * 调用 DeepSeek 多模态（图片+文字）
+     */
+    public String callDeepSeekVision(String systemPrompt, String userPrompt, List<String> images) throws IOException, InterruptedException {
+        JSONObject body = new JSONObject();
+        body.put("model", "deepseek-vl");
+
+        JSONArray messages = new JSONArray();
+        JSONObject sysMsg = new JSONObject();
+        sysMsg.put("role", "system");
+        sysMsg.put("content", systemPrompt);
+        messages.add(sysMsg);
+
+        JSONObject userMsg = new JSONObject();
+        userMsg.put("role", "user");
+        JSONArray content = new JSONArray();
+        content.add(JSONObject.of("type", "text", "text", userPrompt));
+        if (images != null) {
+            for (String img : images) {
+                content.add(JSONObject.of("type", "image_url", "image_url", JSONObject.of("url", img)));
+            }
+        }
+        userMsg.put("content", content);
+        messages.add(userMsg);
+        body.put("messages", messages);
+
+        HttpRequest req = HttpRequest.newBuilder()
+                .uri(URI.create(DEEPSEEK_API))
+                .header("Content-Type", "application/json")
+                .header("Authorization", "Bearer " + deepseekApiKey)
+                .POST(HttpRequest.BodyPublishers.ofString(body.toJSONString()))
+                .build();
+
+        HttpResponse<String> resp = getActiveHttpClient().send(req, HttpResponse.BodyHandlers.ofString());
+        if (resp.statusCode() != 200) throw new IOException("DeepSeek 调用失败: " + resp.statusCode());
+        return JSON.parseObject(resp.body()).getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content").trim();
+    }
+
+    /**
+     * 调用 DeepSeek 纯文本
+     */
+    public String callDeepSeekChat(String systemPrompt, String userMessage) throws IOException, InterruptedException {
+        JSONObject body = new JSONObject();
+        body.put("model", "deepseek-chat");
+
+        JSONArray messages = new JSONArray();
+        messages.add(JSONObject.of("role", "system", "content", systemPrompt));
+        messages.add(JSONObject.of("role", "user", "content", userMessage));
+        body.put("messages", messages);
+
+        HttpRequest req = HttpRequest.newBuilder()
+                .uri(URI.create(DEEPSEEK_API))
+                .header("Content-Type", "application/json")
+                .header("Authorization", "Bearer " + deepseekApiKey)
+                .POST(HttpRequest.BodyPublishers.ofString(body.toJSONString()))
+                .build();
+
+        HttpResponse<String> resp = getActiveHttpClient().send(req, HttpResponse.BodyHandlers.ofString());
+        if (resp.statusCode() != 200) throw new IOException("DeepSeek 调用失败: " + resp.statusCode());
+        return JSON.parseObject(resp.body()).getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content").trim();
     }
 
     /**

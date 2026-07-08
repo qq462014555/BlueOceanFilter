@@ -272,7 +272,7 @@ function renderAiPromptGrid() {
     html += '<div style="grid-column:1/-1;margin-bottom:4px;display:flex;justify-content:flex-end;">';
     html += '<label style="font-size:12px;color:#667eea;cursor:pointer;"><input type="checkbox" id="selectAllPrompt" checked onchange="toggleAllPrompts(this)"> 一键全选</label>';
     html += '</div>';
-    for (let i = 1; i <= 5; i++) {
+    for (let i = 1; i <= 4; i++) {
         const key = '图' + i;
         const val = prompts[key] || '';
         html += '<div class="prompt-item">';

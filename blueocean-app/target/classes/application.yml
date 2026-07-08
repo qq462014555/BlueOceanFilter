@@ -26,6 +26,7 @@ mybatis-plus:
 
 app:
   dashscope-api-key: sk-af8375bb801743cb8dccd5b76e62ecc9
+  deepseek-api-key: ${DEEPSEEK_API_KEY:}
   openrouter-api-key: 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
   proxy-host: 127.0.0.1
   proxy-port: 7897

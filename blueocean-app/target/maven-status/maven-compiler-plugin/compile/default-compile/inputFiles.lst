@@ -24,6 +24,7 @@ G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\service\ChromePortM
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\service\DetailImageService.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\scraper\SkuData.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\BlueOceanApplication.java
+G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\service\DeepSeekService.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\sku\extractor\PresetAttrExtractor.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\ocr\PaddleOcrService.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\scraper\UrlCleaner.java

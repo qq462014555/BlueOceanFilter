@@ -1,6 +1,7 @@
 package com.blueocean.controller;
 
 import com.blueocean.service.DashScopeClient;
+import com.blueocean.service.DeepSeekService;
 import com.blueocean.service.OpenRouterService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,13 +29,15 @@ public class AiImageController {
     private static final Logger log = LoggerFactory.getLogger(AiImageController.class);
 
     private final OpenRouterService openRouterService;
+    private final DeepSeekService deepSeekService;
     private final DashScopeClient dashScopeClient;
 
     // 提示词配置文件路径
     private static final String PROMPT_FILE = "ai_image_prompts.json";
 
-    public AiImageController(OpenRouterService openRouterService, DashScopeClient dashScopeClient) {
+    public AiImageController(OpenRouterService openRouterService, DeepSeekService deepSeekService, DashScopeClient dashScopeClient) {
         this.openRouterService = openRouterService;
+        this.deepSeekService = deepSeekService;
         this.dashScopeClient = dashScopeClient;
     }
 
@@ -100,8 +103,8 @@ public class AiImageController {
                     - 不要改变产品的核心外观（形状、结构、颜色）
                     - 只改变背景、光线、构图角度、氛围、场景
                     """;
-            // 用 qwen-vl-max 多模态分析（带文字 + 主图 + 详情图）
-            String aiResponse = dashScopeClient.chatWithImages(systemPrompt, userPrompt,
+            // 用 DeepSeek 多模态分析（带文字 + 主图 + 详情图）
+            String aiResponse = deepSeekService.chatWithImages(systemPrompt, userPrompt,
                     productImages.isEmpty() ? null : productImages);
 
             // 5. 解析 AI 返回的 JSON
@@ -379,8 +382,8 @@ public class AiImageController {
 
             String systemPrompt = "你是一名电商主图提示词优化专家。根据商品分析信息，优化用户提供的 AI 绘图提示词。";
 
-            // 用通义千问优化（跟 AI 商品分析同一模型）
-            String result = dashScopeClient.chat(systemPrompt, userPrompt, DashScopeClient.MODEL_QWEN3_6_PLUS);
+            // 用 DeepSeek 优化
+            String result = deepSeekService.chat(systemPrompt, userPrompt);
 
             return ResponseEntity.ok(Map.of(
                     "success", true,
@@ -468,7 +471,8 @@ public class AiImageController {
             } catch (Exception ignored) {}
 
             // 一次性生成2张图，n=2
-            String prompt = "生成2张产品白底图。第1张是45°斜前方单一视角，只展示产品正面；第2张是正面、侧面、背面三个视角横向排列的组合图。两张都只保留产品自身Logo，禁止添加任何文字、文案、价格、水印、装饰。白底淡影。";
+            String prompt = "生成图都保留产品原有的Logo和印刷文字不变，禁止额外添加促销文案、卖点说明、价格、水印、装饰。白底淡影。第1张是 只展示产品正面,以45°斜前方单一视角。第2张是正面、侧面、背面三个视角横向排列的组合图。";/* +
+                    "";*/
             String genPath = openRouterService.generateImageRaw(
                     "openai/gpt-image-2", prompt, productDir, "whitebg_temp", nextIdx, 2,
                     refImages.isEmpty() ? null : refImages);
@@ -793,30 +797,27 @@ public class AiImageController {
                 "3. 【卖点3：体验+实际好处】\n" +
                 "画面顶部居中放置加粗主标题文案：【一句话痛点解决方案】，字体醒目不突兀。\n" +
                 "背景为纯净浅色系，整体干净整洁，产品材质细节真实还原。专业无影棚光效，光影均匀，整体风格专业可信，所有文字清晰准确、字");
-        taobaoPrompts.put("图3", "场景代入图・营造使用氛围感\n" +
-                "核心逻辑：真实使用场景 + 轻人物互动 + 唤醒用户需求联想\n" +
+        taobaoPrompts.put("图3",
+                "1. 核心搜索词（替换成当前产品热搜词/精准词）\n" +
+                "【产品核心热搜词、精准类目词、用户常用搜索词、场景关联词】\n" +
+                "2. 用户核心刚需罗列（替换成买家真实痛点、需求、期待）\n" +
+                "【用户使用过程核心痛点、解决麻烦、提升便利、使用安心、适配需求、基础功能刚需、场景适配刚需】\n" +
+                "3. 三项差异化优化思路（AI作图重点表达、画面重点展示）\n" +
+                "【第1点：直观展示产品核心使用方式/佩戴/安装/用法优势】\n" +
+                "【第2点：可视化展示产品结构、容量、材质、适配性核心亮点】\n" +
+                "【第3点：突出产品独有细节设计、安全/舒适/升级卖点，拉开普通款差距】\n" +
+                "4. 本产品独有功能 / 核心卖点（全部可视觉化的卖点）\n" +
+                "【独有设计、升级材质、结构优势、多功能适配、场景通用性、舒适体验、安全防护、实用细节卖点】");
+        taobaoPrompts.put("图4", "核心卖点图・痛点解决方案\n" +
+                "核心逻辑：量化核心卖点 + 直击用户痛点 + 功能可视化呈现\n" +
                 "plaintext\n" +
-                "电商场景化产品主图，正方形1440×1440像素。【典型使用场景】中自然放置【商品全称】，有真人局部肢体自然互动使用产品（仅露出肢体/局部身体，不露出脸部，规避肖像权风险），采用45度平视/俯拍视角，呈现生活化自然状态。\n" +
-                "产品完美融入场景，营造舒适自然的使用氛围感。光线为柔和窗边自然光，色调舒适明亮，画面干净整洁，产品依然是视觉核心，场景元素仅做点缀不抢镜。\n" +
-                "画面右上角放置柔和的深灰色文案：【多场景适配slogan】，文字轻盈不破坏画面氛围。\n" +
-                "整体色调统一，光影自然真实，材质细节清晰，沉浸式展现使用体验，文字清晰准确无错漏。");
-        taobaoPrompts.put("图4", "信任细节图・打消决策顾虑\n" +
-                "核心逻辑：细节特写举证 + 售后保障兜底 + 消除决策疑虑\n" +
-                "plaintext\n" +
-                "电商产品细节信任主图，正方形1440×1440像素。画面采用四格均匀分栏布局，分别展示四个核心产品细节，每个分栏配对应说明文案：\n" +
-                "1. 左上：【细节1特写：材质/工艺】，配文【对应优势说明】\n" +
-                "2. 右上：【细节2特写：功能/结构】，配文【对应优势说明】\n" +
-                "3. 左下：【细节3特写：设计/配件】，配文【对应优势说明】\n" +
-                "4. 右下：【细节4特写：便携/收纳】，配文【对应优势说明】\n" +
-                "画面顶部居中放置加粗主标题文案：【信任类总结话术】，底部添加一行小字文案：7天无理由退换 赠运费险。\n" +
-                "背景为纯净浅灰色，每个分栏干净有序，细节清晰锐利，光影均匀柔和，整体呈现专业可靠的质感，所有文字字体统一、清晰准确、无错字");
-        taobaoPrompts.put("图5", "纯白底图・推荐流量入口\n" +
-                "核心逻辑：严格符合平台规范 + 算法精准识别 + 获取免费推荐流量\n" +
-                "注：此图为流量合规刚需，全程无任何文字、装饰，是所有博主共识的统一标准\n" +
-                "plaintext\n" +
-                "电商纯白底产品图，正方形1440×1440像素，严格符合电商平台首页推荐流量准入标准。【商品全称】完整居中放置，正面微侧视角，完整展现产品外观轮廓，占据画面80%左右空间。\n" +
-                "纯纯白色背景（RGB 255,255,255），完全干净无任何杂质，无投影、无倒影、无拼接、无任何文字、logo与装饰元素。\n" +
-                "专业无影棚布光，光影均匀柔和，产品外观、材质纹理清晰可见，颜色还原真实，边缘锐利干净。");
+                "电商产品卖点主图，正方形1440×1440像素。画面中心偏上放置【商品全称】的核心展示视角，清晰呈现产品核心功能结构。\n" +
+                "画面均匀分布3个核心卖点模块，搭配极简线性图标，每个模块配清晰黑体文案：\n" +
+                "1. 【卖点1：功能+用户价值】\n" +
+                "2. 【卖点2：材质+差异化优势】\n" +
+                "3. 【卖点3：体验+实际好处】\n" +
+                "画面顶部居中放置加粗主标题文案：【一句话痛点解决方案】，字体醒目不突兀。\n" +
+                "背景为纯净浅色系，整体干净整洁，产品材质细节真实还原。专业无影棚光效，光影均匀，整体风格专业可信，所有文字清晰准确、字");
         platforms.put("taobao", taobaoPrompts);
 
         for (String p : List.of("douyin", "shopee")) {
