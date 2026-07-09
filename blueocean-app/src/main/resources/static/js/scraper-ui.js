@@ -255,10 +255,14 @@ function renderAiModelSelect(models) {
         } else {
             sel.innerHTML = '<option value="black-forest-labs/FLUX.1-schnell">FLUX.1 Schnell</option>';
         }
-        // 恢复之前的选中值
+        // 恢复之前的选中值，无则默认 Image 2
         if (prevVal) {
             for (const opt of sel.options) {
                 if (opt.value === prevVal) { sel.value = prevVal; break; }
+            }
+        } else {
+            for (const opt of sel.options) {
+                if (opt.value === 'openai/gpt-image-2') { sel.value = opt.value; break; }
             }
         }
     });
@@ -276,12 +280,14 @@ function renderAiPromptGrid() {
     for (let i = 1; i <= 4; i++) {
         const key = '图' + i;
         const val = prompts[key] || '';
-        html += '<div class="prompt-item">';
+        html += '<div class="prompt-item" style="display:flex;flex-direction:column;gap:4px;">';
         html += '<div class="prompt-item-header">';
         html += '<span class="img-label">' + (_aiPlatformNames[_aiRedrawPlatform] || _aiRedrawPlatform) + ' - ' + key + '</span>';
         html += '<label class="prompt-check"><input type="checkbox" data-check-key="' + key + '" checked> 是否生成图</label>';
         html += '</div>';
-        html += '<textarea data-key="' + key + '" placeholder="输入生成风格提示词...">' + escapeHtml(val) + '</textarea>';
+        html += '<textarea data-key="' + key + '" placeholder="输入生成风格提示词..." style="width:100%;height:300px;">' + escapeHtml(val) + '</textarea>';
+        // 图片展示区（横向画廊，新图追加在右侧）
+        html += '<div class="ai-gen-slot" id="aiGenSlot_' + key + '" style="display:none;flex-direction:row;gap:8px;overflow-x:auto;padding:4px 0;"></div>';
         html += '<button class="btn-optimize-prompt" data-key="' + key + '" onclick="optimizePrompt(this)">🧠 智能优化提示词</button>';
         html += '</div>';
     }
@@ -410,19 +416,19 @@ async function loadGeneratedMainImages(productDir) {
         const resp = await fetch('/api/ai-image/list-images?productDir=' + encodeURIComponent(productDir));
         if (!resp.ok) return;
         const data = await resp.json();
-        if (!data.images || data.images.length === 0) return;
-        const btnParent = document.getElementById('aiGenerateBtn') ? document.getElementById('aiGenerateBtn').parentElement : null;
-        if (!btnParent) return;
-        document.querySelectorAll('.ai-gen-main-grid').forEach(el => el.remove());
-        let html = '<div class="ai-gen-main-grid" style="border-top:1px solid #eee;padding-top:12px;margin-top:12px;">';
-        html += '<div style="font-size:12px;font-weight:600;color:#667eea;margin-bottom:8px;">🎨 已生成主图</div>';
-        html += '<div style="display:flex;gap:8px;flex-wrap:wrap;max-height:200px;overflow-y:auto;">';
-        data.images.forEach(img => {
-            const u = '/api/ai-image/image-file?path=' + encodeURIComponent(img.path);
-            html += '<div style="text-align:center;"><img src="' + u + '&t=' + Date.now() + '" style="width:80px;height:80px;object-fit:cover;border-radius:6px;border:1px solid #e0e0e0;cursor:pointer;" onclick="showModal(this.src)"><div style="font-size:9px;color:#999;margin-top:2px;">' + img.name + '</div></div>';
+        (data.images || []).forEach(function(img) {
+            const match = img.name.match(/主图_(\d+)_主图\d+\.jpg/);
+            if (!match) return;
+            const key = '图' + parseInt(match[1]);
+            const slot = document.getElementById('aiGenSlot_' + key);
+            if (slot) {
+                const u = '/api/ai-image/image-file?path=' + encodeURIComponent(img.path);
+                // 避免重复添加
+                if (slot.querySelector('img[src*="' + encodeURIComponent(img.path) + '"]')) return;
+                slot.style.display = 'flex';
+                slot.insertAdjacentHTML('beforeend', '<div style="flex-shrink:0;width:120px;height:120px;border-radius:6px;border:1px solid #e0e0e0;overflow:hidden;"><img src="' + u + '&t=' + Date.now() + '" style="width:100%;height:100%;object-fit:cover;cursor:pointer;" onclick="showModal(this.src)"></div>');
+            }
         });
-        html += '</div></div>';
-        btnParent.insertAdjacentHTML('afterend', html);
     } catch (e) {
         console.error('加载已生成主图失败', e);
     }
@@ -503,10 +509,41 @@ function renderWhiteBgGrid(images) {
     html += '</div><div class="img-container" style="display:flex;gap:8px;flex-wrap:wrap;">';
     images.forEach((img, idx) => {
         const imgUrl = '/api/ai-image/image-file?path=' + encodeURIComponent(img.path);
-        html += '<div style="text-align:center;"><img src="' + imgUrl + '&t=' + Date.now() + '" style="width:100px;height:100px;object-fit:cover;border-radius:6px;border:1px solid #e0e0e0;cursor:pointer;" onclick="showModal(\'' + imgUrl + '\')"><div style="font-size:10px;color:#999;margin-top:2px;">' + img.name + '</div></div>';
+        html += '<div style="text-align:center;">';
+        html += '<img src="' + imgUrl + '&t=' + Date.now() + '" style="width:100px;height:100px;object-fit:cover;border-radius:6px;border:1px solid #e0e0e0;cursor:pointer;" onclick="showModal(\'' + imgUrl + '\')">';
+        html += '<div style="font-size:10px;color:#999;margin-top:2px;">' + img.name + '</div>';
+        html += '<button onclick="deleteWhiteBgImage(\'' + encodeURIComponent(img.path) + '\')" style="margin-top:4px;padding:2px 8px;border:1px solid #ff4d4f;border-radius:4px;font-size:10px;background:#fff;color:#ff4d4f;cursor:pointer;">🗑️ 删除</button>';
+        html += '</div>';
     });
     html += '</div></div>';
     section.insertAdjacentHTML('afterend', html);
+}
+
+// 删除单张白底图
+async function deleteWhiteBgImage(encodedPath) {
+    if (!confirm('确定删除这张白底图吗？')) return;
+    const path = decodeURIComponent(encodedPath);
+    try {
+        const resp = await fetch('/api/ai-image/delete-file', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path })
+        });
+        if (resp.ok) {
+            showToast('✅ 白底图已删除', 'success');
+            if (_aiRedrawProductDir) {
+                const listResp = await fetch('/api/ai-image/list-whitebg-images?productDir=' + encodeURIComponent(_aiRedrawProductDir));
+                if (listResp.ok) {
+                    const data = await listResp.json();
+                    renderWhiteBgGrid(data.images || []);
+                }
+            }
+        } else {
+            showToast('❌ 删除失败', 'error');
+        }
+    } catch (e) {
+        showToast('❌ 删除失败: ' + e.message, 'error');
+    }
 }
 
 let _aiWhiteBgLoading = false;
@@ -551,8 +588,11 @@ async function loadWhiteBgImages(productDir) {
         html += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
         data.images.forEach((img, idx) => {
             const imgUrl = galleryUrls[idx];
-            html += '<div style="text-align:center;"><img src="' + imgUrl + '" style="width:100px;height:100px;object-fit:cover;border-radius:6px;border:1px solid #e0e0e0;cursor:pointer;" onclick="showModal(\'' + imgUrl + '\',' + JSON.stringify(galleryUrls).replace(/"/g,"'") + ',' + idx + ')">';
-            html += '<div style="font-size:10px;color:#999;margin-top:2px;">' + img.name + '</div></div>';
+            html += '<div style="text-align:center;">';
+            html += '<img src="' + imgUrl + '" style="width:100px;height:100px;object-fit:cover;border-radius:6px;border:1px solid #e0e0e0;cursor:pointer;" onclick="showModal(\'' + imgUrl + '\',' + JSON.stringify(galleryUrls).replace(/"/g,"'") + ',' + idx + ')">';
+            html += '<div style="font-size:10px;color:#999;margin-top:2px;">' + img.name + '</div>';
+            html += '<button onclick="deleteWhiteBgImage(\'' + encodeURIComponent(img.path) + '\')" style="margin-top:4px;padding:2px 8px;border:1px solid #ff4d4f;border-radius:4px;font-size:10px;background:#fff;color:#ff4d4f;cursor:pointer;">🗑️ 删除</button>';
+            html += '</div>';
         });
         html += '</div></div>';
         analysisSection.insertAdjacentHTML('afterend', html);
@@ -610,6 +650,19 @@ async function generateAiImages() {
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner"></span> 生成中...';
     status.textContent = '正在生成...';
+    // 生成前：在画廊右侧追加加载占位框
+    const loadKeys = {};
+    keys.forEach(key => {
+        const slot = document.getElementById('aiGenSlot_' + key);
+        if (slot) {
+            slot.style.display = 'flex';
+            const loadHtml = '<div class="ai-gen-loading" style="flex-shrink:0;width:120px;height:120px;border-radius:6px;border:2px dashed #667eea;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;background:#f0f2ff;">'
+                + '<span class="spinner" style="display:inline-block;width:20px;height:20px;border-width:2px;border-top-color:#667eea;"></span>'
+                + '<span style="font-size:11px;color:#667eea;">生成中...</span></div>';
+            slot.insertAdjacentHTML('beforeend', loadHtml);
+            loadKeys[key] = true;
+        }
+    });
     try {
         const resp = await fetch('/api/ai-image/generate-all', {
             method: 'POST',
@@ -624,25 +677,35 @@ async function generateAiImages() {
             const data = await resp.json();
             status.textContent = '✅ ' + (data.succeeded || 0) + '/' + (data.total || 0) + ' 成功';
             if (data.results && data.results.length > 0) {
-                document.querySelectorAll('.ai-gen-previews').forEach(el => el.remove());
-                const btnParent = document.getElementById('aiGenerateBtn').parentElement;
-                if (btnParent) {
-                    document.querySelectorAll('.ai-gen-previews').forEach(el => el.remove());
-                    let ph = '<div class="ai-gen-previews" style="border-top:1px solid #eee;padding-top:12px;margin-top:12px;"><div style="font-size:13px;font-weight:600;margin-bottom:8px;">🖼️ 生成结果</div><div style="display:flex;gap:10px;flex-wrap:wrap;">';
-                    data.results.forEach(r => {
+                data.results.forEach(function(r) {
+                    const slot = document.getElementById('aiGenSlot_' + r.key);
+                    if (slot) {
                         const u = '/api/ai-image/image-file?path=' + encodeURIComponent(r.path);
-                        ph += '<div style="text-align:center;"><img src="' + u + '&t=' + Date.now() + '" style="width:100px;height:100px;object-fit:cover;border-radius:6px;border:1px solid #e0e0e0;cursor:pointer;" onclick="showModal(this.src)"><div style="font-size:10px;color:#999;margin-top:2px;">' + (r.key || '') + '</div></div>';
-                    });
-                    ph += '</div></div>';
-                    btnParent.insertAdjacentHTML('afterend', ph);
-                    setTimeout(() => { btnParent.scrollIntoView({behavior:'smooth', block:'nearest'}); }, 50);
-                }
+                        // 替换加载占位框为实际图片
+                        const loadingEl = slot.querySelector('.ai-gen-loading');
+                        if (loadingEl) {
+                            loadingEl.outerHTML = '<div style="flex-shrink:0;width:120px;height:120px;border-radius:6px;border:1px solid #e0e0e0;overflow:hidden;"><img src="' + u + '&t=' + Date.now() + '" style="width:100%;height:100%;object-fit:cover;cursor:pointer;" onclick="showModal(this.src)"></div>';
+                        } else {
+                            slot.insertAdjacentHTML('beforeend', '<div style="flex-shrink:0;width:120px;height:120px;border-radius:6px;border:1px solid #e0e0e0;overflow:hidden;"><img src="' + u + '&t=' + Date.now() + '" style="width:100%;height:100%;object-fit:cover;cursor:pointer;" onclick="showModal(this.src)"></div>');
+                        }
+                    }
+                });
             }
-        } else {
-            status.textContent = '❌ 生成失败';
+            // 失败的项移除加载占位框
+            if (data.errors && data.errors.length > 0) {
+                data.errors.forEach(function(e) {
+                    const slot = document.getElementById('aiGenSlot_' + e.key);
+                    if (slot) {
+                        const loadingEl = slot.querySelector('.ai-gen-loading');
+                        if (loadingEl) loadingEl.remove();
+                    }
+                });
+            }
         }
     } catch (e) {
         status.textContent = '❌ ' + e.message;
+        // 请求整体失败，移除所有加载占位框
+        document.querySelectorAll('.ai-gen-loading').forEach(el => el.remove());
     }
     btn.disabled = false;
     btn.textContent = '🚀 生成全部勾选的主图';
@@ -717,16 +780,41 @@ function renderReplaceGrid() {
     let html = '';
     _aiReplaceImages.forEach((img, idx) => {
         const src = img.startsWith('data:') || img.startsWith('http://') || img.startsWith('https://') ? img : '/api/ai-image/image-file?path=' + encodeURIComponent(img);
-        html += '<div class="img-item" data-filepath="" style="margin-bottom:8px;">';
+        html += '<div class="img-item" data-filepath="" style="margin-bottom:8px;display:flex;flex-direction:column;align-items:center;">';
         html += '<div class="img-wrap"><img draggable="true" src="' + src + '" onclick="showModal(this.src)">';
         html += '<div class="img-label">' + (idx + 1) + '</div></div>';
         html += '<div class="img-actions-bar"><button class="action-btn btn-delete" onclick="removeReplaceImage(' + idx + ')">删除</button></div>';
         html += '<input type="text" class="replace-prompt-input" data-idx="' + idx + '" placeholder="必填：输入替换要求（如：替换模特手上的物件）" value="' + escapeHtml(_aiReplacePrompts[idx] || '') + '" style="width:100%;margin-top:4px;padding:6px 8px;border:1px solid #ff4d4f;border-radius:4px;font-size:11px;outline:none;" onchange="updateReplacePrompt(' + idx + ', this.value)">';
+        // AI 生成结果 slot
+        html += '<div class="replace-gen-slot" id="replaceGenSlot_' + idx + '" style="margin-top:6px;width:120px;min-height:100px;border:1px dashed #d9d9d9;border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#ccc;font-size:11px;background:#fafafa;">';
+        html += '<span style="font-size:10px;">结果图</span></div>';
         html += '</div>';
     });
-    html += '<div class="img-item"><div class="img-placeholder" onclick="openReplaceUpload(this)">';
-    html += '<div class="placeholder-icon">+</div><div class="placeholder-text">添加图</div></div></div>';
+    // 保留原有的权重
+    if (_aiReplaceImages.length === 0) {
+        html += '<div class="img-item"><div class="img-placeholder" onclick="openReplaceUpload(this)">';
+        html += '<div class="placeholder-icon">+</div><div class="placeholder-text">添加图</div></div></div>';
+    } else {
+        html += '<div class="img-item" style="display:flex;flex-direction:column;align-items:center;justify-content:center;"><div class="img-placeholder" onclick="openReplaceUpload(this)">';
+        html += '<div class="placeholder-icon">+</div><div class="placeholder-text">添加图</div></div></div>';
+    }
     grid.innerHTML = html;
+    // 渲染已有结果
+    _aiReplaceResults.forEach((r, ri) => {
+        const slot = document.getElementById('replaceGenSlot_' + ri);
+        if (!slot) return;
+        const u = '/api/ai-image/image-file?path=' + encodeURIComponent(r.path);
+        slot.style.border = '1px solid #e0e0e0';
+        slot.style.background = '#fff';
+        slot.style.justifyContent = 'flex-start';
+        slot.innerHTML = ''
+            + '<img src="' + u + '&t=' + Date.now() + '" style="width:120px;height:100px;object-fit:cover;border-radius:4px;cursor:pointer;" onclick="showModal(this.src)">'
+            + '<div style="font-size:10px;color:#999;margin-top:2px;">' + r.key + '</div>'
+            + '<div style="margin-top:4px;display:flex;gap:4px;">'
+            + '<button onclick="regenerateReplaceImage(' + ri + ')" style="padding:2px 6px;border:1px solid #667eea;border-radius:4px;font-size:10px;background:#fff;color:#667eea;cursor:pointer;">🔄</button>'
+            + '<button onclick="deleteReplaceImage(' + ri + ',\'' + r.path + '\')" style="padding:2px 6px;border:1px solid #ff4d4f;border-radius:4px;font-size:10px;background:#fff;color:#ff4d4f;cursor:pointer;">🗑️</button>'
+            + '</div>';
+    });
 }
 
 function updateReplacePrompt(idx, val) {
@@ -804,26 +892,22 @@ async function regenerateReplaceImage(idx) {
 }
 
 function showReplaceResults() {
-    const grid = document.getElementById('aiReplaceGrid');
-    if (!grid || !_aiReplaceResults.length) return;
-    const old = grid.parentElement.querySelector('.ai-replace-results');
-    if (old) old.remove();
-    let rh = '<div class=\"ai-replace-results\" style=\"width:100%;border-top:1px solid #eee;padding-top:12px;margin-top:12px;\"><div style=\"font-size:13px;font-weight:600;margin-bottom:8px;\">🖼️ 替换结果</div><div style=\"display:flex;gap:10px;flex-wrap:wrap;\">';
+    // 将生成结果填入每张图下方的 replaceGenSlot 中
     _aiReplaceResults.forEach((r, ri) => {
+        const slot = document.getElementById('replaceGenSlot_' + ri);
+        if (!slot) return;
         const u = '/api/ai-image/image-file?path=' + encodeURIComponent(r.path);
-        rh += '<div style=\"text-align:center;\">';
-        rh += '<img src=\"' + u + '&t=' + Date.now() + '\" style=\"width:100px;height:100px;object-fit:cover;border-radius:6px;border:1px solid #e0e0e0;cursor:pointer;\" onclick=\"showModal(this.src)\">';
-        rh += '<div style=\"font-size:10px;color:#999;margin-top:2px;\">' + r.key + '</div>';
-        rh += '<div style=\"margin-top:4px;display:flex;gap:4px;justify-content:center;\">';
-        rh += '<button onclick=\"regenerateReplaceImage(' + ri + ')\" style=\"padding:2px 8px;border:1px solid #667eea;border-radius:4px;font-size:10px;background:#fff;color:#667eea;cursor:pointer;\">🔄 重新生成</button>';
-        rh += '<button onclick=\"deleteReplaceImage(' + ri + ',\'' + r.path + '\')\" style=\"padding:2px 8px;border:1px solid #ff4d4f;border-radius:4px;font-size:10px;background:#fff;color:#ff4d4f;cursor:pointer;\">🗑️ 删除</button>';
-        rh += '</div></div>';
+        slot.style.border = '1px solid #e0e0e0';
+        slot.style.background = '#fff';
+        slot.style.justifyContent = 'flex-start';
+        slot.innerHTML = ''
+            + '<img src="' + u + '&t=' + Date.now() + '" style="width:120px;height:100px;object-fit:cover;border-radius:4px;cursor:pointer;" onclick="showModal(this.src)">'
+            + '<div style="font-size:10px;color:#999;margin-top:2px;">' + r.key + '</div>'
+            + '<div style="margin-top:4px;display:flex;gap:4px;">'
+            + '<button onclick="regenerateReplaceImage(' + ri + ')" style="padding:2px 6px;border:1px solid #667eea;border-radius:4px;font-size:10px;background:#fff;color:#667eea;cursor:pointer;">🔄</button>'
+            + '<button onclick="deleteReplaceImage(' + ri + ',\'' + r.path + '\')" style="padding:2px 6px;border:1px solid #ff4d4f;border-radius:4px;font-size:10px;background:#fff;color:#ff4d4f;cursor:pointer;">🗑️</button>'
+            + '</div>';
     });
-    rh += '</div></div>';
-    const wrap = document.createElement('div');
-    wrap.className = 'ai-replace-results';
-    wrap.innerHTML = rh;
-    grid.parentElement.insertBefore(wrap, grid.nextSibling);
 }
 
 // 删除单张替换图
@@ -873,6 +957,8 @@ document.addEventListener('click', function(e) {
     platBtn.classList.add('active');
     _aiRedrawPlatform = platBtn.dataset.platform;
     renderAiPromptGrid();
+    // 加载该平台已有 AI 图
+    if (_aiRedrawProductDir) loadGeneratedMainImages(_aiRedrawProductDir);
 });
 
 function escapeHtml(str) {

@@ -35,6 +35,9 @@ public class AiImageController {
     // 提示词配置文件路径
     private static final String PROMPT_FILE = "ai_image_prompts.json";
 
+    @org.springframework.beans.factory.annotation.Value("${app.public-url:}")
+    private String publicUrl;
+
     public AiImageController(OpenRouterService openRouterService, DeepSeekService deepSeekService, DashScopeClient dashScopeClient) {
         this.openRouterService = openRouterService;
         this.deepSeekService = deepSeekService;
@@ -103,15 +106,28 @@ public class AiImageController {
                     - 不要改变产品的核心外观（形状、结构、颜色）
                     - 只改变背景、光线、构图角度、氛围、场景
                     """;
-            // 用 DeepSeek 多模态分析（带文字 + 主图 + 详情图）
-            String aiResponse = deepSeekService.chatWithImages(systemPrompt, userPrompt,
+            // 用通义千问多模态分析（支持看图）
+            String aiResponse = dashScopeClient.chatWithImages(systemPrompt, userPrompt,
                     productImages.isEmpty() ? null : productImages);
 
             // 5. 解析 AI 返回的 JSON
             try {
                 String cleanJson = aiResponse.replaceAll("```[a-z]*\\n?", "").trim();
-                @SuppressWarnings("unchecked")
-                Map<String, Object> prompts = com.alibaba.fastjson2.JSON.parseObject(cleanJson, Map.class);
+                // Qwen 有时返回多个 JSON 对象（分析+提示词分开），逐个解析合并
+                Map<String, Object> prompts = new LinkedHashMap<>();
+                int searchStart = 0;
+                while (true) {
+                    int objStart = cleanJson.indexOf('{', searchStart);
+                    if (objStart < 0) break;
+                    int objEnd = cleanJson.indexOf('}', objStart);
+                    if (objEnd < 0) break;
+                    String part = cleanJson.substring(objStart, objEnd + 1);
+                    try {
+                        Map<String, Object> parsed = com.alibaba.fastjson2.JSON.parseObject(part, Map.class);
+                        if (parsed != null) prompts.putAll(parsed);
+                    } catch (Exception ignored) {}
+                    searchStart = objEnd + 1;
+                }
                 result.put("success", true);
                 result.put("prompts", prompts);
                 result.put("title", title);
@@ -119,7 +135,7 @@ public class AiImageController {
                 // 保存到缓存
                 try {
                     Files.createDirectories(cacheDir);
-                    Files.writeString(cacheFile, cleanJson);
+                    Files.writeString(cacheFile, com.alibaba.fastjson2.JSON.toJSONString(prompts));
                     log.info("AI 分析结果已缓存: {}", cacheFile);
                 } catch (IOException e) {
                     log.warn("写入缓存失败: {}", e.getMessage());
@@ -306,22 +322,38 @@ public class AiImageController {
         List<Map<String, Object>> results = new ArrayList<>();
         List<Map<String, Object>> errors = new ArrayList<>();
 
+        // 准备白底图参考图
+        String baseUrl = publicUrl != null && !publicUrl.isEmpty() ? publicUrl : "http://127.0.0.1:8080";
+        List<String> refImages = new ArrayList<>();
+        Path whiteBgDir = Paths.get(productDir, "白底图");
+        if (Files.exists(whiteBgDir)) {
+            try {
+                Path stitchedPath = openRouterService.stitchWhiteBgToFile(whiteBgDir, "whitebg_stitched.jpg");
+                if (stitchedPath != null) {
+                    String encoded = java.net.URLEncoder.encode(stitchedPath.toString(), java.nio.charset.StandardCharsets.UTF_8);
+                    refImages.add(baseUrl + "/api/ai-image/image-file?path=" + encoded);
+                    log.info("📷 白底图拼接 外网URL: {}", baseUrl + "/api/ai-image/image-file?path=" + encoded);
+                    log.info("📷 白底图拼接 本地URL: http://127.0.0.1:8080/api/ai-image/image-file?path={}", encoded);
+                }
+            } catch (Exception e) {
+                log.warn("白底图拼接失败: {}", e.getMessage());
+            }
+        }
+
         for (Map.Entry<String, String> entry : allPrompts.entrySet()) {
             String key = entry.getKey();
             String singlePrompt = entry.getValue();
             if (singlePrompt == null || singlePrompt.trim().isEmpty()) continue;
             int imageIndex = Integer.parseInt(key.replace("图", ""));
             String singleCombined = key + "：\n" + singlePrompt;
-            // 只传当前图的提示词，不带其他图的
             Map<String, String> singlePromptMap = Map.of(key, singlePrompt);
             try {
-                String savedPath = openRouterService.generateImage(model, singleCombined, singlePromptMap, productDir, platform, imageIndex, 1);
+                String savedPath = openRouterService.generateImageWithRefs(model, singleCombined, singlePromptMap, productDir, platform, imageIndex, 1, refImages.isEmpty() ? null : refImages);
                 results.add(Map.of("key", key, "path", savedPath, "success", true));
             } catch (Exception e) {
                 log.error("生成{}失败: {}", key, e.getMessage());
                 errors.add(Map.of("key", key, "error", e.getMessage()));
             }
-            // 每张间隔 2 秒
             try { Thread.sleep(2000); } catch (InterruptedException ignored) { break; }
         }
 
@@ -349,6 +381,25 @@ public class AiImageController {
             String contentType = path.toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg";
             return ResponseEntity.ok()
                     .header("Content-Type", contentType)
+                    .body(data);
+        } catch (IOException e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    /**
+     * 白底图参考图短链（临时目录，URL 简短防穿透截断）
+     */
+    @GetMapping("/ref/{id}")
+    public ResponseEntity<byte[]> getRefImage(@PathVariable int id) {
+        try {
+            Path file = Paths.get(System.getProperty("java.io.tmpdir"), "ai-ref", id + ".jpg");
+            if (!Files.exists(file)) {
+                return ResponseEntity.notFound().build();
+            }
+            byte[] data = Files.readAllBytes(file);
+            return ResponseEntity.ok()
+                    .header("Content-Type", "image/jpeg")
                     .body(data);
         } catch (IOException e) {
             return ResponseEntity.badRequest().build();
@@ -447,17 +498,19 @@ public class AiImageController {
             return ResponseEntity.ok(Map.of("success", true, "images", images, "fromCache", true));
         }
 
-        // 没有白底图，调用 Qwen-Image-2.0 生成
+        // 没有白底图，调用 AI 生成
         try {
-            // 压缩拼接参考图（最多3张，模型限制 0~3 张）
             List<String> refImages = new ArrayList<>();
-            refImages.addAll(openRouterService.stitchDirToBase64(Paths.get(productDir, "主图"), "白底图_主图参考.jpg", 2));
-            // 最多再加1张详情图（总共不超过3张）
-            if (refImages.size() < 3) {
-                refImages.addAll(openRouterService.stitchDirToBase64(Paths.get(productDir, "详情图"), "白底图_详情参考.jpg", 1));
+            String baseUrl2 = publicUrl != null && !publicUrl.isEmpty() ? publicUrl : "http://127.0.0.1:8080";
+            for (String path : openRouterService.stitchDirToFiles(Paths.get(productDir, "主图"), "白底图_主图参考.jpg", 1)) {
+                String encoded = java.net.URLEncoder.encode(path, java.nio.charset.StandardCharsets.UTF_8);
+                refImages.add(baseUrl2 + "/api/ai-image/image-file?path=" + encoded);
             }
-            // 截断到3张
-            if (refImages.size() > 3) refImages = new ArrayList<>(refImages.subList(0, 3));
+            for (String path : openRouterService.stitchDirToFiles(Paths.get(productDir, "详情图"), "白底图_详情参考.jpg", 2)) {
+                String encoded = java.net.URLEncoder.encode(path, java.nio.charset.StandardCharsets.UTF_8);
+                refImages.add(baseUrl2 + "/api/ai-image/image-file?path=" + encoded);
+            }
+
 
             // 计算已有白底图数量，从下一个编号开始追加
             int nextIdx = 1;
@@ -469,31 +522,26 @@ public class AiImageController {
                     if (existingCount > 0) nextIdx = (int) existingCount + 1;
                 }
             } catch (Exception ignored) {}
+            // 并发两张白底图
+            String baseP = "生成图都保留产品原有的Logo和印刷文字不变，禁止额外添加促销文案、卖点说明、价格、水印、装饰。白底淡影。";
+            int finalNextIdx = nextIdx;
+            java.util.concurrent.CompletableFuture<String> cf1 = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+                java.util.List<String> r = refImages.isEmpty() ? null : new java.util.ArrayList<>(refImages);
+                try { return openRouterService.generateImageRaw("openai/gpt-image-2", baseP + "第1张是 只展示产品正面,以45°斜前方单一视角。", productDir, "whitebg_temp", finalNextIdx, 1, r); }
+                catch (Exception e) { log.warn("白底图1失败: {}", e.getMessage()); return null; }
+            });
+            int finalNextIdx1 = nextIdx;
+            java.util.concurrent.CompletableFuture<String> cf2 = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+                java.util.List<String> r = refImages.isEmpty() ? null : new java.util.ArrayList<>(refImages);
+                try { return openRouterService.generateImageRaw("openai/gpt-image-2", baseP + "第2张是正面、侧面、背面三个视角横向排列的组合图。", productDir, "whitebg_temp", finalNextIdx1 + 1, 1, r); }
+                catch (Exception e) { log.warn("白底图2失败: {}", e.getMessage()); return null; }
+            });
+            String g1 = cf1.get();
+            if (g1 != null) { Path fp1 = Paths.get(g1); if (Files.exists(fp1)) { images.add(java.util.Map.of("path", fp1.toString(), "name", "白底图_正面45度.jpg")); } }
+            String g2 = cf2.get();
+            if (g2 != null) { Path fp2 = Paths.get(g2); if (Files.exists(fp2)) { images.add(java.util.Map.of("path", fp2.toString(), "name", "白底图_多角度组合.jpg")); } }
 
-            // 一次性生成2张图，n=2
-            String prompt = "生成图都保留产品原有的Logo和印刷文字不变，禁止额外添加促销文案、卖点说明、价格、水印、装饰。白底淡影。第1张是 只展示产品正面,以45°斜前方单一视角。第2张是正面、侧面、背面三个视角横向排列的组合图。";/* +
-                    "";*/
-            String genPath = openRouterService.generateImageRaw(
-                    "openai/gpt-image-2", prompt, productDir, "whitebg_temp", nextIdx, 2,
-                    refImages.isEmpty() ? null : refImages);
-            // 处理生成的图片
-            if (genPath != null) {
-                Path file = Paths.get(genPath);
-                if (Files.exists(file)) {
-                    Map<String, Object> item = new LinkedHashMap<>();
-                    item.put("path", file.toString());
-                    item.put("name", "白底图_正面45度.jpg");
-                    images.add(item);
-                }
-                // 第二张图（nextIdx+1）
-                Path file2 = Paths.get(genPath).resolveSibling(String.format("白底图_%02d.jpg", nextIdx + 1));
-                if (Files.exists(file2)) {
-                    Map<String, Object> item2 = new LinkedHashMap<>();
-                    item2.put("path", file2.toString());
-                    item2.put("name", "白底图_多角度组合.jpg");
-                    images.add(item2);
-                }
-            }
+
         } catch (Exception e) {
             log.error("生成白底图失败", e);
             return ResponseEntity.ok(Map.of("success", false, "error", "生成失败: " + e.getMessage(), "images", images));

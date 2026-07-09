@@ -289,6 +289,10 @@ public class DashScopeClient {
         body.put("model", MODEL_QWEN3_6_PLUS_VL);
         body.put("messages", messages);
 
+        String logBody = body.toJSONString().replaceAll("\"data:([^;]+;base64,)[^\"]{30}[^\"]*\"", "\"data:$1...(截断)");
+        log.info("[多模态] curl:\ncurl -X POST {} \\\n  -H \"Authorization: Bearer {}\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{}'",
+            DASHSCOPE_CHAT_URL, apiKey, logBody);
+
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(DASHSCOPE_CHAT_URL))
                 .header("Content-Type", "application/json")

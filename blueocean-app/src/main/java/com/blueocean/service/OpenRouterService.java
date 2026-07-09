@@ -53,6 +53,12 @@ public class  OpenRouterService {
     @Value("${app.openrouter-api-key:}")
     private String apiKey;
 
+    @Value("${app.image2-provider:openrouter}")
+    private String image2Provider;
+
+    @jakarta.annotation.Resource
+    private LK888Image2Provider lk888Image2Provider;
+
     // 代理配置（从 application.yml 读取，app.proxy-host / app.proxy-port）
     @Value("${app.proxy-host:}")
     private String proxyHost;
@@ -63,6 +69,7 @@ public class  OpenRouterService {
     private HttpClient directClient;
     private HttpClient proxiedClient;
 
+    private Image2Provider activeImage2Provider;
     @jakarta.annotation.PostConstruct
     public void initHttpClient() {
         directClient = HttpClient.newBuilder()
@@ -76,6 +83,12 @@ public class  OpenRouterService {
                     .build();
         } else {
             proxiedClient = null;
+        }
+        if ("lk888".equals(image2Provider)) {
+            activeImage2Provider = lk888Image2Provider;
+            log.info("Image2 提供者: LK888");
+        } else {
+            log.info("Image2 提供者: OpenRouter");
         }
     }
 
@@ -120,6 +133,24 @@ public class  OpenRouterService {
     public String generateImageRaw(String model, String rawPrompt, String productDir, String platform, int imageIndex, int n, List<String> refImages) {
         try {
             boolean isImage2 = model != null && model.toLowerCase().contains("gpt-image");
+
+            // 如果启用了 LK888 且是 image2 模型，走 LK888 策略
+            if (isImage2 && "lk888".equals(image2Provider) && activeImage2Provider != null) {
+                String size = "1024x1024";
+                List<String> urls = activeImage2Provider.generate(rawPrompt, n, size, refImages);
+                String firstUrl = null;
+                for (int i = 0; i < urls.size(); i++) {
+                    String saved = downloadImage(urls.get(i), productDir, platform, imageIndex + i);
+                    if (saved != null) {
+                        String encoded = java.net.URLEncoder.encode(saved, java.nio.charset.StandardCharsets.UTF_8);
+                        log.info("🔗 本地访问: http://127.0.0.1:8080/api/ai-image/image-file?path={}", encoded);
+                    }
+                    if (i == 0) firstUrl = saved;
+                }
+                if (firstUrl != null) return firstUrl;
+                throw new RuntimeException("LK888 生成图片失败");
+            }
+
             String jsonBody;
             String endpoint;
 
@@ -156,6 +187,24 @@ public class  OpenRouterService {
         try {
             String fullPrompt = buildFullPrompt(prompt, allPrompts, imageIndex, n);
             boolean isImage2 = model != null && model.toLowerCase().contains("gpt-image");
+
+            // 优先走 LK888
+            if (isImage2 && "lk888".equals(image2Provider) && activeImage2Provider != null) {
+                String size = "1024x1024";
+                String firstUrl = null;
+                List<String> urls = activeImage2Provider.generate(fullPrompt, n, size, refImages);
+                for (int i = 0; i < urls.size(); i++) {
+                    String saved = downloadImage(urls.get(i), productDir, platform, imageIndex + i);
+                    if (saved != null) {
+                        String encoded = java.net.URLEncoder.encode(saved, java.nio.charset.StandardCharsets.UTF_8);
+                        log.info("🔗 本地访问: http://127.0.0.1:8080/api/ai-image/image-file?path={}", encoded);
+                    }
+                    if (i == 0) firstUrl = saved;
+                }
+                if (firstUrl != null) return firstUrl;
+                throw new RuntimeException("LK888 生成图片失败");
+            }
+
             String jsonBody;
             String endpoint;
 
@@ -381,9 +430,67 @@ public class  OpenRouterService {
         }
     }
 
+    // 对外暴露的拼接方法（供 Controller 使用）
+    public byte[] stitchFilesToBytes(List<Path> files, int maxWidth, float quality) throws IOException {
+        return stitchImages(files, maxWidth, quality);
+    }
+
+    /**
+     * 拼接白底图成一张并保存到临时目录，返回文件路径
+     */
+    public Path stitchWhiteBgToFile(Path whiteBgDir, String saveName) throws IOException {
+        byte[] stitched = stitchImages(whiteBgDir, 1024, 0.9f);
+        if (stitched == null) return null;
+        Path saveDir = Paths.get(System.getProperty("java.io.tmpdir"), "ai-ref");
+        Files.createDirectories(saveDir);
+        Path target = saveDir.resolve(saveName);
+        Files.write(target, stitched);
+        log.info("白底图拼接已保存: {} ({}KB)", target, stitched.length / 1024);
+        return target;
+    }
+
     /**
      * 拼接目录下的图片，返回 base64 data URL 列表（供 AI 分析使用）
      */
+    /**
+     * 和 stitchDirToBase64 一样的分组拼接逻辑，但保存到临时目录并返回文件路径列表
+     */
+    public List<String> stitchDirToFiles(Path dir, String saveFileName, int parts) {
+        List<String> result = new ArrayList<>();
+        if (!Files.exists(dir)) return result;
+        Path tempDir = Paths.get(System.getProperty("java.io.tmpdir"), "ai-ref");
+        try {
+            Files.createDirectories(tempDir);
+            List<Path> files;
+            try (var stream = Files.list(dir)) {
+                files = stream.filter(f -> {
+                    String n = f.toString().toLowerCase();
+                    return n.endsWith(".jpg") || n.endsWith(".png");
+                }).sorted().toList();
+            }
+            if (files.isEmpty()) return result;
+
+            int groupSize = (int) Math.ceil((double) files.size() / parts);
+            for (int p = 0; p < parts; p++) {
+                int from = p * groupSize;
+                int to = Math.min(from + groupSize, files.size());
+                if (from >= files.size()) break;
+                byte[] stitched = stitchImages(files.subList(from, to), 1024, 0.9f);
+                if (stitched != null) {
+                    String name = parts > 1 ? saveFileName.replace(".jpg", "_" + (p + 1) + ".jpg") : saveFileName;
+                    saveSentImage(stitched, name);
+                    Path target = tempDir.resolve(name);
+                    Files.write(target, stitched);
+                    result.add(target.toString());
+                    log.info("拼接参考图(文件): {} ({}KB, {}/{})", name, stitched.length / 1024, p + 1, parts);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("拼接目录失败 {}: {}", saveFileName, e.getMessage());
+        }
+        return result;
+    }
+
     public List<String> stitchDirToBase64(Path dir, String saveFileName, int parts) {
         List<String> result = new ArrayList<>();
         if (!Files.exists(dir)) return result;
@@ -769,42 +876,7 @@ public class  OpenRouterService {
         }
     }
 
-    /**
-     * 压缩单张图片：最长边缩到 maxSize，JPEG 质量 quality
-     */
-    private byte[] compressImage(Path imgPath, int maxSize, float quality) throws IOException {
-        BufferedImage original = ImageIO.read(imgPath.toFile());
-        if (original == null) {
-            // 读不到就用原图
-            return Files.readAllBytes(imgPath);
-        }
 
-        int w = original.getWidth();
-        int h = original.getHeight();
-        if (w <= maxSize && h <= maxSize) {
-            // 已经够小，只做 JPEG 压缩
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            ImageIO.write(original, "jpg", baos);
-            return baos.toByteArray();
-        }
-
-        // 缩放
-        double scale = Math.min((double) maxSize / w, (double) maxSize / h);
-        int newW = (int) (w * scale);
-        int newH = (int) (h * scale);
-        BufferedImage scaled = new BufferedImage(newW, newH, BufferedImage.TYPE_INT_RGB);
-        Graphics2D g2d = scaled.createGraphics();
-        g2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-        g2d.drawImage(original, 0, 0, newW, newH, null);
-        g2d.dispose();
-
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        ImageIO.write(scaled, "jpg", baos);
-        byte[] result = baos.toByteArray();
-        log.info("图片压缩: {} → {}x{} ({}KB → {}KB)", imgPath.getFileName(), newW, newH,
-                Files.size(imgPath) / 1024, result.length / 1024);
-        return result;
-    }
 
     /**
      * 解码 base64 并保存为图片（二次写入，剥离元数据）
@@ -814,13 +886,17 @@ public class  OpenRouterService {
         BufferedImage rawImg = ImageIO.read(new ByteArrayInputStream(data));
         if (rawImg != null) {
             ImageIO.write(rawImg, "jpg", targetPath.toFile());
-            log.info("图片已保存（二次写入，剥离元数据）: {}", targetPath);
-            return targetPath.toString();
+            String saved = targetPath.toString();
+            String encoded = java.net.URLEncoder.encode(saved, java.nio.charset.StandardCharsets.UTF_8);
+            log.info("🔗 本地访问: http://127.0.0.1:8080/api/ai-image/image-file?path={}", encoded);
+            return saved;
         }
         // 兜底：直接写字节
         Files.write(targetPath, data);
-        log.info("图片已保存（base64直接解码）: {}", targetPath);
-        return targetPath.toString();
+        String saved = targetPath.toString();
+        String encoded = java.net.URLEncoder.encode(saved, java.nio.charset.StandardCharsets.UTF_8);
+        log.info("🔗 本地访问: http://127.0.0.1:8080/api/ai-image/image-file?path={}", encoded);
+        return saved;
     }
 
     /**
@@ -879,7 +955,10 @@ public class  OpenRouterService {
 
             if (resp.statusCode() == 200 && resp.body().length > 0) {
                 Files.write(targetPath, resp.body());
-                return targetPath.toString();
+                String saved = targetPath.toString();
+                String encoded = java.net.URLEncoder.encode(saved, java.nio.charset.StandardCharsets.UTF_8);
+                log.info("🔗 本地访问: http://127.0.0.1:8080/api/ai-image/image-file?path={}", encoded);
+                return saved;
             } else {
                 throw new RuntimeException("下载图片失败: HTTP " + resp.statusCode());
             }
@@ -999,7 +1078,7 @@ public class  OpenRouterService {
 
             requestBody.put("messages", messages);
             requestBody.put("temperature", 0.3);
-            requestBody.put("max_tokens", 2000);
+            requestBody.put("max_tokens", 28000);
 
             String jsonBody = requestBody.toJSONString();
             log.info("调用 OpenRouter 分析: prompt={}字符, images={}张", userPrompt.length(), images != null ? images.size() : 0);

@@ -78,6 +78,8 @@ public class DeepSeekService {
     }
 
     private String execute(String jsonBody) throws IOException, InterruptedException {
+        log.info("[DeepSeek] curl:\ncurl -X POST {} \\\n  -H \"Authorization: Bearer {}\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{}'",
+            DEEPSEEK_API, apiKey, jsonBody);
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(DEEPSEEK_API))
                 .header("Content-Type", "application/json")

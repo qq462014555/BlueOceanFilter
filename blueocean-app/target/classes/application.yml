@@ -19,6 +19,14 @@ spring:
           starttls:
             enable: true
 
+logging:
+  file:
+    name: C:/Users/46201/Desktop/ai-image-log.txt
+  logback:
+    rollingpolicy:
+      max-history: 3
+      max-file-size: 50MB
+
 mybatis-plus:
   mapper-locations: classpath:mapper/*.xml
 #  configuration:
@@ -26,8 +34,11 @@ mybatis-plus:
 
 app:
   dashscope-api-key: sk-af8375bb801743cb8dccd5b76e62ecc9
-  deepseek-api-key: ${DEEPSEEK_API_KEY:}
+  deepseek-api-key: sk-2953659abdc44c8bbdafbc6fa49d0e68
   openrouter-api-key: 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
+  lk888-api-key: sk-862109526e96c8d06f4c789717481204c0183b4cfa10a9f9
+  image2-provider: lk888
+  public-url: http://1cdf8baf.r2.cpolar.top
   proxy-host: 127.0.0.1
   proxy-port: 7897
   batch-size: 200

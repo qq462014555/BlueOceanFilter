@@ -2,6 +2,7 @@ G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\ExcelWriter.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\service\SignalConsumer.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\entity\KeywordResult.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\scraper\ProductData.java
+G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\service\Image2Provider.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\entity\TrendKeyword.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\scraper\ScraperConfig.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\scraper\LinkFileReader.java
@@ -18,10 +19,12 @@ G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\TestRunner.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\taobao\InspectSxkc.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\config\MailConfig.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\scraper\QianniuAttributeScraper.java
+G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\service\LK888Image2Provider.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\service\MainImageService.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\sku\extractor\CreateSpecAttrExtractor.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\service\ChromePortMonitor.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\service\DetailImageService.java
+G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\service\OpenRouterImage2Provider.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\scraper\SkuData.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\BlueOceanApplication.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\service\DeepSeekService.java
