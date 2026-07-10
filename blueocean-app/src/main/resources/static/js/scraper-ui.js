@@ -205,9 +205,19 @@ function openAiRedrawModal(productDir) {
         renderAiAnalysis(_aiRedrawAnalysis);
         renderAiPromptGrid();
         loadGeneratedMainImages(productDir);
+        // 查询白底图
+        fetch("/api/ai-image/list-whitebg-images?productDir=" + encodeURIComponent(productDir))
+            .then(function(r){return r.json()})
+            .then(function(d){renderWhiteBgGrid(d.images || [])})
+            .catch(function(){});
         return;
     }
     autoGeneratePrompts(productDir);
+    // 每次打开都查询白底图并渲染（无论是否有图）
+    fetch("/api/ai-image/list-whitebg-images?productDir=" + encodeURIComponent(productDir))
+        .then(function(r){return r.json()})
+        .then(function(d){renderWhiteBgGrid(d.images || [])})
+        .catch(function(){});
 }
 
 function closeAiRedrawModal() {
@@ -384,7 +394,7 @@ async function autoGeneratePrompts(productDir, forceNew) {
                 }
                 renderAiPromptGrid();
                 loadGeneratedMainImages(productDir);
-                fetch("/api/ai-image/list-whitebg-images?productDir=" + encodeURIComponent(productDir)) .then(function(r){return r.json()}).then(function(d){if(d.images&&d.images.length>0)renderWhiteBgGrid(d.images)}).catch(function(){});
+                fetch("/api/ai-image/list-whitebg-images?productDir=" + encodeURIComponent(productDir)) .then(function(r){return r.json()}).then(function(d){renderWhiteBgGrid(d.images||[])}).catch(function(){});
                 saveCurrentToCache();
             }
         }
@@ -495,30 +505,31 @@ async function pollWhiteBgImages() {
 }
 
 function renderWhiteBgGrid(images) {
-    const section = document.getElementById('aiAnalysisSection');
-    if (!section || !images.length) return;
-    // 正在重新生成中时，不渲染（等完成后再替换）
+    var section = document.getElementById("aiAnalysisSection");
+    if (!section) return;
     if (_aiWhiteBgLoading) return;
-    document.querySelectorAll('.ai-whitebg-grid').forEach(el => el.remove());
-    const galleryUrls = images.map(img => '/api/ai-image/image-file?path=' + encodeURIComponent(img.path));
-    let html = '<div class="ai-whitebg-grid" style="margin-top:12px;padding-top:12px;border-top:1px solid #d6e4ff;">';
-    html += '<div style="font-size:12px;font-weight:600;color:#1d39c4;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">';
-    html += '<span>⬜ 白底图 <span class="whitebg-count">' + images.length + '/3</span></span>';
-    html += '<button class="btn-ai-refresh" onclick="regenerateWhiteBg()" style="font-size:11px;padding:2px 10px;">🔄 重新生成</button>';
-    html += '</div><div class="img-container" style="display:flex;gap:8px;flex-wrap:wrap;">';
-    images.forEach((img, idx) => {
-        const imgUrl = '/api/ai-image/image-file?path=' + encodeURIComponent(img.path);
-        html += '<div style="text-align:center;">';
-        html += '<img src="' + imgUrl + '&t=' + Date.now() + '" style="width:100px;height:100px;object-fit:cover;border-radius:6px;border:1px solid #e0e0e0;cursor:pointer;" onclick="showModal(\'' + imgUrl + '\')">';
-        html += '<div style="font-size:10px;color:#999;margin-top:2px;">' + img.name + '</div>';
-        html += '<button onclick="deleteWhiteBgImage(\'' + encodeURIComponent(img.path) + '\')" style="margin-top:4px;padding:2px 8px;border:1px solid #ff4d4f;border-radius:4px;font-size:10px;background:#fff;color:#ff4d4f;cursor:pointer;">🗑️ 删除</button>';
-        html += '</div>';
-    });
-    html += '</div></div>';
-    section.insertAdjacentHTML('afterend', html);
+    document.querySelectorAll(".ai-whitebg-grid").forEach(function(e){e.remove()});
+    var h = "";
+    h += "<div class=\"ai-whitebg-grid\" style=\"margin-top:12px;padding-top:12px;border-top:1px solid #d6e4ff;\">";
+    h += "<div style=\"font-size:12px;font-weight:600;color:#1d39c4;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;\">";
+    h += "<span>⬜ 白底图 <span class=\"whitebg-count\">" + images.length + "/3</span></span>";
+    h += "<button class=\"btn-ai-refresh\" onclick=\"regenerateWhiteBg()\" style=\"font-size:11px;padding:2px 10px;\">🔄 重新生成</button>";
+    h += "</div><div class=\"img-container\" style=\"display:flex;gap:8px;flex-wrap:wrap;\">";
+    for (var i = 0; i < images.length; i++) {
+        var img = images[i];
+        var u = "/api/ai-image/image-file?path=" + encodeURIComponent(img.path);
+        h += "<div style=\"text-align:center;\">";
+        h += "<img src=\"" + u + "&t=" + Date.now() + "\" style=\"width:100px;height:100px;object-fit:cover;border-radius:6px;border:1px solid #e0e0e0;cursor:pointer;\" onclick=\"showModal(this.src)\">";
+        h += "<div style=\"font-size:10px;color:#999;margin-top:2px;\">" + escapeHtml(img.name) + "</div>";
+        h += "<button onclick=\"deleteWhiteBgImage('" + encodeURIComponent(img.path) + "')\" style=\"margin-top:4px;padding:2px 8px;border:1px solid #ff4d4f;border-radius:4px;font-size:10px;background:#fff;color:#ff4d4f;cursor:pointer;\">🗑️ 删除</button>";
+        h += "</div>";
+    }
+    h += "<div style=\"text-align:center;cursor:pointer;\" onclick=\"openWhiteBgUpload()\">";
+    h += "<div style=\"width:100px;height:100px;border:2px dashed #d9d9d9;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#999;font-size:12px;background:#fafafa;\">";
+    h += "<span style=\"font-size:24px;\">+</span><span style=\"margin-top:4px;\">添加图</span></div></div>";
+    h += "</div></div>";
+    section.insertAdjacentHTML("afterend", h);
 }
-
-// 删除单张白底图
 async function deleteWhiteBgImage(encodedPath) {
     if (!confirm('确定删除这张白底图吗？')) return;
     const path = decodeURIComponent(encodedPath);
