@@ -5,25 +5,24 @@ import { loadPrompts } from '../api/aiImage'
 import AnalysisSection from './AnalysisSection.vue'
 import PromptGrid from './PromptGrid.vue'
 import WhiteBgSection from './WhiteBgSection.vue'
+import ReplaceSection from './ReplaceSection.vue'
 
 const props = defineProps<{ productDir: string }>()
 const emit = defineEmits<{ (e: 'update:productDir', v: string): void }>()
 
-const { platform, setPlatform, setModels, setPromptsForPlatform } = useAiState()
+const { platform, setPlatform, setModels, setPromptsForPlatform, modelList, selectedModel, setProductDir } = useAiState()
 const tab = ref('generate')
 const dirInput = ref('')
 
-async function init(dir: string) {
+// 同步 productDir 到共享状态（AnalysisSection 等依赖它）
+watch(() => props.productDir, async (dir) => {
+  setProductDir(dir)
   if (!dir) return
   const data = await loadPrompts()
   setModels(data.models || [])
   for (const p of Object.keys(data.platforms || {})) {
     setPromptsForPlatform(p, data.platforms[p] || {})
   }
-}
-
-watch(() => props.productDir, (dir) => {
-  if (dir) init(dir)
 }, { immediate: true })
 
 function loadDir() {
@@ -35,7 +34,7 @@ function loadDir() {
 <template>
   <div class="panel">
     <div class="dir-bar">
-      <input v-model="dirInput" placeholder="输入商品目录路径" class="dir-input" />
+      <input v-model="dirInput" :placeholder="productDir || '输入商品目录路径'" class="dir-input" />
       <button class="btn-load" @click="loadDir">加载</button>
     </div>
     <template v-if="productDir">
@@ -47,21 +46,28 @@ function loadDir() {
         </button>
       </div>
       <AnalysisSection />
+      <WhiteBgSection :productDir="productDir" />
       <div class="tab-bar">
         <button v-for="t in [{ k: 'reference', label: '📷 参考图' }, { k: 'replace', label: '🔄 替换图' }, { k: 'generate', label: '🎨 自定义生成主图' }]"
           :key="t.k" :class="['tab', { active: tab === t.k }]" @click="tab = t.k">
           {{ t.label }}
         </button>
       </div>
-      <div v-if="tab === 'generate'" class="tab-content">
-        <PromptGrid />
-        <WhiteBgSection :productDir="productDir" />
+      <div v-if="tab === 'reference'" class="tab-content">
+        <div style="padding:10px 0;color:#999;font-size:13px;">📷 参考图区域</div>
       </div>
       <div v-if="tab === 'replace'" class="tab-content">
-        <WhiteBgSection :productDir="productDir" />
+        <ReplaceSection />
       </div>
-      <div v-if="tab === 'reference'" class="tab-content">
-        <div style="padding:10px 0;color:#999;font-size:13px;">📷 参考图区域（待完成）</div>
+      <div v-if="tab === 'generate'" class="tab-content">
+        <div class="model-select">
+          <label>图生成ai模型：</label>
+          <select v-model="selectedModel">
+            <option v-for="m in modelList" :key="m.id" :value="m.id">{{ m.name }}</option>
+            <option value="black-forest-labs/FLUX.1-schnell">FLUX.1 Schnell</option>
+          </select>
+        </div>
+        <PromptGrid />
       </div>
     </template>
   </div>
@@ -79,4 +85,7 @@ function loadDir() {
 .tab { flex: 1; padding: 10px; border: 2px solid #e0e0e0; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; background: #fff; text-align: center; }
 .tab.active { background: #667eea; color: #fff; border-color: #667eea; }
 .tab-content { min-height: 200px; }
+.model-select { display: flex; align-items: center; gap: 12px; padding: 16px; background: #fafafa; border-radius: 10px; margin-bottom: 12px; }
+.model-select label { font-size: 13px; font-weight: 600; white-space: nowrap; }
+.model-select select { flex: 1; padding: 8px 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 13px; }
 </style>

@@ -10,10 +10,12 @@ com\blueocean\service\DetailImageService.class
 com\blueocean\controller\AiImageController.class
 InspectSxkc.class
 com\blueocean\mapper\FilterTaskMapper.class
+com\blueocean\controller\ai_main_image\ReplaceController.class
 com\blueocean\service\AttributeMappingService.class
 com\blueocean\service\ExcelReader.class
 com\blueocean\service\ChromePortMonitor.class
 com\blueocean\sku\SkuFillController.class
+com\blueocean\controller\ai_main_image\MainImageController.class
 com\blueocean\ExcelWriter.class
 com\blueocean\sku\extractor\PresetAttrExtractor$2.class
 com\blueocean\scraper\ExcelReporter.class
@@ -29,6 +31,7 @@ com\blueocean\controller\FileController.class
 com\blueocean\util\ChromeLauncher.class
 com\blueocean\BlueOceanApplication.class
 com\blueocean\service\Image2Provider.class
+com\blueocean\controller\ai_main_image\WhiteBgController.class
 com\blueocean\config\AsyncConfig.class
 com\blueocean\config\ChromeDebugConfig.class
 com\blueocean\config\MailConfig.class
@@ -40,6 +43,7 @@ com\blueocean\service\OpenRouterService.class
 com\blueocean\controller\FileManagerController$1.class
 com\blueocean\service\ImageFileService.class
 com\blueocean\ocr\PaddleOcrService.class
+com\blueocean\service\AnalysisService.class
 com\blueocean\controller\ScraperController.class
 com\blueocean\sku\extractor\PresetAttrExtractor$1.class
 com\blueocean\scraper\ScraperConfig.class
@@ -62,6 +66,7 @@ com\blueocean\util\ClaudeSignal.class
 com\blueocean\scraper\QianniuAttributeScraper.class
 com\blueocean\scraper\UrlCleaner.class
 com\blueocean\sku\extractor\SkuAttrExtractor$PriceStock.class
+com\blueocean\controller\ai_main_image\AnalysisController.class
 com\blueocean\controller\FileManagerController.class
 com\blueocean\service\SkuImageService.class
 com\blueocean\service\DashScopeClient.class

@@ -33,6 +33,7 @@ G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\ocr\PaddleOcrServic
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\scraper\UrlCleaner.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\service\EmailNotificationService.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\sku\extractor\SkuAttrExtractor.java
+G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\controller\ai_main_image\WhiteBgController.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\controller\FileController.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\util\ChromeLauncher.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\mapper\FilterTaskMapper.java
@@ -47,11 +48,15 @@ G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\entity\FilterTask.j
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\sku\extractor\SkuAttrExtractorFactory.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\util\ClaudeSignal.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\service\KeywordProcessingService.java
+G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\controller\ai_main_image\AnalysisController.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\service\AttributeAutoFillService.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\controller\ScraperController.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\sku\SkuFillService.java
+G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\controller\ai_main_image\ReplaceController.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\mapper\KeywordHistoryMapper.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\mapper\TrendKeywordMapper.java
+G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\controller\ai_main_image\MainImageController.java
+G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\service\AnalysisService.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\controller\TrendWordInfo.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\controller\AttributeAutoFillController.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\controller\OpenClawController.java

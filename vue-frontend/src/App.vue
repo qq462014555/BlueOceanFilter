@@ -1,14 +1,25 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted, provide } from 'vue'
 import AiImagePanel from './components/AiImagePanel.vue'
+import ImageGallery from './components/ImageGallery.vue'
 
 const productDir = ref('')
-</script>
+const galleryRef = ref<InstanceType<typeof ImageGallery>>()
 
+provide('previewImage', (url: string, allImgs?: string[], idx?: number) => {
+  galleryRef.value?.open(url, allImgs, idx)
+})
+
+onMounted(() => {
+  const params = new URLSearchParams(window.location.search)
+  const dir = params.get('dir')
+  if (dir) productDir.value = dir
+})
+</script>
 <template>
   <div class="app-container">
     <div class="header">
-      <h1>🎨 AI 主图重绘</h1>
+      <h1>🎨 AI 主图重绘 <span style="font-size:14px;opacity:0.8;">Vue 版</span></h1>
       <p>管理淘宝、抖音、虾皮三个平台的 5 张主图生成提示词</p>
     </div>
     <div class="nav-bar">
@@ -22,9 +33,9 @@ const productDir = ref('')
     <div class="content">
       <AiImagePanel v-model:productDir="productDir" />
     </div>
+    <ImageGallery ref="galleryRef" />
   </div>
 </template>
-
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
