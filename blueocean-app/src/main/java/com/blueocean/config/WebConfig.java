@@ -27,4 +27,8 @@ public class WebConfig implements WebMvcConfigurer {
                 .setCachePeriod(0)
                 .resourceChain(true);
     }
+    @Override
+    public void addViewControllers(org.springframework.web.servlet.config.annotation.ViewControllerRegistry registry) {
+        registry.addViewController("/vue/").setViewName("forward:/vue/index.html");
+    }
 }

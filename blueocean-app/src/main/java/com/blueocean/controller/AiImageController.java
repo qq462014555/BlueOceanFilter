@@ -35,6 +35,9 @@ public class AiImageController {
     // 提示词配置文件路径
     private static final String PROMPT_FILE = "ai_image_prompts.json";
 
+    // 全局任务状态：productDir → (taskType → "running"/"completed"/"failed")
+    private static final java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.ConcurrentHashMap<String, String>> TASK_STATUS = new java.util.concurrent.ConcurrentHashMap<>();
+
     @org.springframework.beans.factory.annotation.Value("${app.public-url:}")
     private String publicUrl;
 
@@ -151,6 +154,7 @@ public class AiImageController {
         } catch (Exception e) {
             log.error("AI 生成提示词失败", e);
             // 返回默认提示词
+            // 返回默认提示词
             Map<String, Object> fallback = new LinkedHashMap<>();
             fallback.put("success", true);
             fallback.put("prompts", getDefaultPromptsForPlatform(platform, ""));
@@ -241,6 +245,57 @@ public class AiImageController {
     /**
      * 获取所有平台的提示词配置
      */
+    @GetMapping("/analysis-status")
+    public ResponseEntity<Map<String, Object>> getAnalysisStatus(@RequestParam String productDir, @RequestParam String platform) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        try {
+            Path cacheFile = Paths.get(productDir, "AI重绘图", ".analysis_" + platform + ".json");
+            Path statusFile = Paths.get(productDir, "AI重绘图", ".analysis_" + platform + ".status");
+            if (Files.exists(cacheFile)) {
+                result.put("status", "completed");
+            } else if (Files.exists(statusFile)) {
+                result.put("status", Files.readString(statusFile).trim());
+            } else {
+                result.put("status", "none");
+            }
+        } catch (Exception e) {
+            result.put("status", "none");
+        }
+        return ResponseEntity.ok(result);
+    }
+
+    // ==================== 任务状态管理 ====================
+
+    @GetMapping("/task-status")
+    public ResponseEntity<Map<String, Object>> getTaskStatus(
+            @RequestParam String productDir, @RequestParam String task) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        java.util.concurrent.ConcurrentHashMap<String, String> tasks = TASK_STATUS.get(productDir);
+        result.put("status", tasks != null ? tasks.getOrDefault(task, "none") : "none");
+        return ResponseEntity.ok(result);
+    }
+
+    @PostMapping("/task-status")
+    public ResponseEntity<Map<String, Object>> setTaskStatus(@RequestBody Map<String, Object> request) {
+        String productDir = (String) request.get("productDir");
+        String task = (String) request.get("task");
+        String status = (String) request.get("status");
+        if (productDir == null || task == null || status == null) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "error", "缺少参数"));
+        }
+        TASK_STATUS.computeIfAbsent(productDir, k -> new java.util.concurrent.ConcurrentHashMap<>()).put(task, status);
+        if ("completed".equals(status) || "failed".equals(status)) {
+            java.util.concurrent.CompletableFuture.runAsync(() -> {
+                try { Thread.sleep(172800000L); } catch (InterruptedException ignored) {}
+                java.util.concurrent.ConcurrentHashMap<String, String> t = TASK_STATUS.get(productDir);
+                if (t != null) t.remove(task);
+            });
+        }
+        return ResponseEntity.ok(Map.of("success", true));
+    }
+
     @GetMapping("/prompts")
     public ResponseEntity<Map<String, Object>> getPrompts() {
         Map<String, Object> result = new LinkedHashMap<>();
@@ -615,6 +670,30 @@ public class AiImageController {
             } catch (IOException ignored) {}
         }
         return ResponseEntity.ok(Map.of("success", true, "images", images));
+    }
+
+    @PostMapping("/upload-white-bg")
+    public ResponseEntity<Map<String, Object>> uploadWhiteBg(@RequestBody Map<String, Object> request) {
+        String productDir = (String) request.get("productDir");
+        String imageData = (String) request.get("image");
+        if (productDir == null || imageData == null) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "error", "缺少参数"));
+        }
+        try {
+            Path whiteBgDir = Paths.get(productDir, "白底图");
+            Files.createDirectories(whiteBgDir);
+            String base64 = imageData.contains(",") ? imageData.substring(imageData.indexOf(',') + 1) : imageData;
+            byte[] bytes = java.util.Base64.getDecoder().decode(base64);
+            long count = Files.list(whiteBgDir).filter(f -> f.toString().toLowerCase().endsWith(".jpg")).count();
+            String fileName = String.format("白底图_%02d.jpg", count + 1);
+            Path target = whiteBgDir.resolve(fileName);
+            Files.write(target, bytes);
+            log.info("白底图上传成功: {}", target);
+            return ResponseEntity.ok(Map.of("success", true, "path", target.toString(), "name", fileName));
+        } catch (Exception e) {
+            log.error("白底图上传失败", e);
+            return ResponseEntity.ok(Map.of("success", false, "error", e.getMessage()));
+        }
     }
 
     @PostMapping("/delete-file")

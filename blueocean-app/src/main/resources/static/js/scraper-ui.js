@@ -204,7 +204,6 @@ function openAiRedrawModal(productDir) {
     if (Object.keys(_aiRedrawAnalysis).length > 0) {
         renderAiAnalysis(_aiRedrawAnalysis);
         renderAiPromptGrid();
-        loadWhiteBgImages(productDir);
         loadGeneratedMainImages(productDir);
         return;
     }
@@ -384,8 +383,8 @@ async function autoGeneratePrompts(productDir, forceNew) {
                     if (data.prompts[key]) _aiRedrawPrompts[_aiRedrawPlatform][key] = data.prompts[key];
                 }
                 renderAiPromptGrid();
-                loadWhiteBgImages(productDir);
                 loadGeneratedMainImages(productDir);
+                fetch("/api/ai-image/list-whitebg-images?productDir=" + encodeURIComponent(productDir)) .then(function(r){return r.json()}).then(function(d){if(d.images&&d.images.length>0)renderWhiteBgGrid(d.images)}).catch(function(){});
                 saveCurrentToCache();
             }
         }

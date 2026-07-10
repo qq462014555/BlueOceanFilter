@@ -70,3 +70,4 @@ com\blueocean\service\SkuRenameService.class
 com\blueocean\entity\TrendKeyword.class
 com\blueocean\scraper\AttributeSaver.class
 com\blueocean\controller\OpenClawController.class
+com\blueocean\controller\FilterController.class
