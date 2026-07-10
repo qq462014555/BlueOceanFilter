@@ -49,6 +49,7 @@ com\blueocean\sku\extractor\PresetAttrExtractor$1.class
 com\blueocean\scraper\ScraperConfig.class
 com\blueocean\scraper\ProductScraper.class
 com\blueocean\mapper\TrendKeywordMapper.class
+com\blueocean\service\ReplaceService.class
 com\blueocean\sku\SkuFillService.class
 com\blueocean\scraper\MerchantAttributeExtractor.class
 com\blueocean\controller\AttributeAutoFillController.class

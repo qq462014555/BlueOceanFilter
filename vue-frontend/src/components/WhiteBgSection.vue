@@ -15,47 +15,36 @@ let pollTimer: ReturnType<typeof setInterval> | null = null
 const imgUrl = (img: WhiteBgImage) =>
   `/api/ai-image/image-file?path=${encodeURIComponent(img.path)}&t=${Date.now()}`
 
-onMounted(async () => {
-  try {
-    const data = await listWhiteBgImages(props.productDir)
-    if (data.images && data.images.length > 0) { images.value = data.images; return }
-  } catch (e) {}
-  try {
-    const st = await getTaskStatus(props.productDir, 'whitebg')
-    if (st.status === 'running') { startPoll() }
-  } catch (e) {}
-})
-
-onUnmounted(() => stopPoll())
-
-function startPoll() {
-  stopPoll()
-  loading.value = true
-  timer.value = 0
+// 进入页面后持续轮询 task-status，有 running 则显示生成中
+onMounted(() => {
+  
   pollTimer = setInterval(async () => {
-    timer.value++
     try {
       const st = await getTaskStatus(props.productDir, 'whitebg')
-      if (st.status === 'completed') {
-        stopPoll()
+      if (st.status === 'running') {
+        loading.value = true
+      } else if (st.status === 'completed') {
+        loading.value = false
         const data = await listWhiteBgImages(props.productDir)
         images.value = data.images || []
-      } else if (st.status === 'failed') {
-        stopPoll()
+      } else if (st.status === 'none' && !images.value.length) {
+        loading.value = false
+        try {
+          const data = await listWhiteBgImages(props.productDir)
+          if (data.images?.length) images.value = data.images
+        } catch (e) {}
       }
     } catch (e) {}
   }, 1000)
-}
+})
 
-function stopPoll() {
-  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; loading.value = false }
-}
+onUnmounted(() => { if (pollTimer) { clearInterval(pollTimer); pollTimer = null } })
 
 function doGenerate() {
   if (loading.value) return
-  startPoll()
-  // 异步触发生成，不阻塞轮询
-  generateWhiteBg(props.productDir, true).catch(() => { stopPoll() })
+  loading.value = true
+  timer.value = 0
+  generateWhiteBg(props.productDir, true).catch(() => { loading.value = false })
 }
 
 async function doDelete(path: string) {
@@ -81,7 +70,7 @@ async function onUpload(data: string) {
       <button class="wb-refresh" :disabled="loading" @click="doGenerate">{{ loading ? '⏳ 生成中...' : '🔄 重新生成' }}</button>
     </div>
     <div v-if="loading" class="wb-loading">
-      <span class="spinner"></span> 正在生成白底图... {{ timer }}s
+      <span class="spinner"></span> 正在生成白底图...
     </div>
     <div v-else class="wb-grid">
       <div v-for="img in images" :key="img.path" class="wb-item">

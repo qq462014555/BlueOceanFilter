@@ -11,21 +11,25 @@ const selectedModel = ref('openai/gpt-image-2')
 const genStatus = ref('')
 const genLoading = ref(false)
 
-// 多商品缓存: productDir -> { analysis, prompts }
+// 替换图缓存（内存）
+const replaceImages = ref<string[]>([])
+const replacePrompts = ref<string[]>([])
+const replaceResults = ref<{ key: string; path: string }[]>([])
+
+// 多商品缓存
 interface ProductCache {
   analysis: AiAnalysis
   prompts: PromptsMap
+  replaceImages: string[]
+  replacePrompts: string[]
+  replaceResults: { key: string; path: string }[]
 }
 const _cache: Record<string, ProductCache> = {}
 
 export function useAiState() {
   function setProductDir(dir: string) {
-    // 切换前保存当前
-    if (productDir.value && productDir.value !== dir) {
-      saveCache()
-    }
+    if (productDir.value && productDir.value !== dir) saveCache()
     productDir.value = dir
-    // 切换后恢复
     restoreCache(dir)
   }
 
@@ -35,6 +39,9 @@ export function useAiState() {
     _cache[d] = {
       analysis: { ...analysis.value },
       prompts: { ...(prompts[platform.value] || {}) },
+      replaceImages: [...replaceImages.value],
+      replacePrompts: [...replacePrompts.value],
+      replaceResults: JSON.parse(JSON.stringify(replaceResults.value)),
     }
   }
 
@@ -42,60 +49,36 @@ export function useAiState() {
     const cached = _cache[dir]
     if (cached) {
       analysis.value = { ...cached.analysis }
-      if (cached.prompts) {
-        prompts[platform.value] = { ...cached.prompts }
-      }
+      if (cached.prompts) prompts[platform.value] = { ...cached.prompts }
+      replaceImages.value = [...(cached.replaceImages || [])]
+      replacePrompts.value = [...(cached.replacePrompts || [])]
+      replaceResults.value = JSON.parse(JSON.stringify(cached.replaceResults || []))
     } else {
       analysis.value = {}
+      replaceImages.value = []
+      replacePrompts.value = []
+      replaceResults.value = []
     }
   }
 
-  function setPlatform(p: string) {
-    platform.value = p
-  }
+  function setPlatform(p: string) { platform.value = p }
+  function setAnalysis(a: AiAnalysis) { analysis.value = a }
+  function getPrompt(p: string, key: string): string { return prompts[p]?.[key] || '' }
+  function setPrompt(p: string, key: string, val: string) { if (!prompts[p]) prompts[p] = {}; prompts[p][key] = val }
+  function setPromptsForPlatform(p: string, data: PromptsMap) { prompts[p] = { ...data } }
+  function setModels(models: Model[]) { modelList.value = models }
+  function clearCache(dir: string) { delete _cache[dir] }
 
-  function setAnalysis(a: AiAnalysis) {
-    analysis.value = a
-  }
-
-  function setPrompt(p: string, key: string, val: string) {
-    if (!prompts[p]) prompts[p] = {}
-    prompts[p][key] = val
-  }
-
-  function getPrompt(p: string, key: string): string {
-    return prompts[p]?.[key] || ''
-  }
-
-  function setPromptsForPlatform(p: string, data: PromptsMap) {
-    prompts[p] = { ...data }
-  }
-
-  function setModels(models: Model[]) {
-    modelList.value = models
-  }
-
-  function clearCache(dir: string) {
-    delete _cache[dir]
+  function setReplaceData(imgs: string[], prmpts: string[], res: { key: string; path: string }[]) {
+    replaceImages.value = imgs
+    replacePrompts.value = prmpts
+    replaceResults.value = res
   }
 
   return {
-    productDir,
-    platform,
-    analysis,
-    prompts,
-    modelList,
-    selectedModel,
-    genStatus,
-    genLoading,
-    setProductDir,
-    setPlatform,
-    setAnalysis,
-    setPrompt,
-    getPrompt,
-    setPromptsForPlatform,
-    setModels,
-    saveCache,
-    clearCache,
+    productDir, platform, analysis, prompts, modelList, selectedModel, genStatus, genLoading,
+    replaceImages, replacePrompts, replaceResults,
+    setProductDir, setPlatform, setAnalysis, setPrompt, getPrompt, setPromptsForPlatform, setModels,
+    saveCache, clearCache, setReplaceData,
   }
 }

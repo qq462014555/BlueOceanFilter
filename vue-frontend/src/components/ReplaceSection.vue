@@ -1,18 +1,17 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, inject } from "vue"
 import { useAiState } from '../composables/useAiState'
-import { replaceImages, listReplaceResults, deleteFile } from '../api/aiImage'
+import { replaceImages as apiReplaceImages, listReplaceResults, deleteFile } from '../api/aiImage'
 import UploadModal from './UploadModal.vue'
 
-const { productDir, selectedModel, modelList } = useAiState()
+const { productDir, selectedModel, modelList, replaceImages, replacePrompts, replaceResults } = useAiState()
 
-const userImages = ref<string[]>([])
-const userPrompts = ref<string[]>([])
-const results = ref<{ key: string; path: string }[]>([])
 const loading = ref(false)
 const status = ref('')
 
 const uploadRef = ref<InstanceType<typeof UploadModal>>()
+const previewImage = inject<(url: string) => void>("previewImage") || ((url: string) => { window.open(url, "_blank"); })
+function getResultUrl(path: string) { return "/api/ai-image/image-file?path=" + encodeURIComponent(path) + "&t=" + Date.now(); }
 const uploadIdx = ref(-1)
 
 watch(productDir, async (dir) => {
@@ -24,7 +23,7 @@ async function loadExisting() {
   try {
     const data = await listReplaceResults(productDir.value)
     if (data.success && data.images) {
-      results.value = data.images.map((img, i) => ({
+      replaceResults.value = data.images.map((img, i) => ({
         key: '替换图' + (i + 1),
         path: img.path,
       }))
@@ -39,39 +38,39 @@ function openUpload(idx: number) {
 
 function onUploadConfirm(data: string) {
   if (uploadIdx.value === -1) {
-    userImages.value.push(data)
-    userPrompts.value.push('')
+    replaceImages.value.push(data)
+    replacePrompts.value.push('')
   } else {
-    userImages.value[uploadIdx.value] = data
+    replaceImages.value[uploadIdx.value] = data
   }
 }
 
 function removeImage(idx: number) {
-  userImages.value.splice(idx, 1)
-  userPrompts.value.splice(idx, 1)
+  replaceImages.value.splice(idx, 1)
+  replacePrompts.value.splice(idx, 1)
 }
 
 function updatePrompt(idx: number, val: string) {
-  userPrompts.value[idx] = val
+  replacePrompts.value[idx] = val
 }
 
 async function generate() {
-  if (userImages.value.length === 0) { status.value = '⚠️ 请先添加图片'; return }
-  const emptyPrompt = userPrompts.value.some(p => !p.trim())
+  if (replaceImages.value.length === 0) { status.value = '⚠️ 请先添加图片'; return }
+  const emptyPrompt = replacePrompts.value.some(p => !p.trim())
   if (emptyPrompt) { status.value = '⚠️ 请填写所有追加提示词'; return }
   if (!productDir.value) return
 
   loading.value = true
   status.value = '正在生成...'
   try {
-    const data = await replaceImages({
+    const data = await apiReplaceImages({
       productDir: productDir.value,
-      images: userImages.value,
-      prompts: userPrompts.value,
+      images: replaceImages.value,
+      prompts: replacePrompts.value,
       model: selectedModel.value,
     })
     status.value = `✅ ${data.succeeded || 0} 成功`
-    if (data.results) results.value = data.results
+    if (data.results) replaceResults.value = data.results
     await loadExisting()
   } catch (e: any) {
     status.value = '❌ ' + e.message
@@ -80,19 +79,19 @@ async function generate() {
 }
 
 async function regenerate(idx: number) {
-  if (!userImages.value[idx]) return
+  if (!replaceImages.value[idx]) return
   loading.value = true
   try {
-    const data = await replaceImages({
+    const data = await apiReplaceImages({
       productDir: productDir.value,
-      images: [userImages.value[idx]],
-      prompts: [userPrompts.value[idx] || ''],
+      images: [replaceImages.value[idx]],
+      prompts: [replacePrompts.value[idx] || ''],
       model: selectedModel.value,
     })
     if (data.results?.[0]) {
-      if (!results.value[idx]) results.value[idx] = data.results[0]
-      else results.value[idx] = data.results[0]
-      results.value = [...results.value]
+      if (!replaceResults.value[idx]) replaceResults.value[idx] = data.results[0]
+      else replaceResults.value[idx] = data.results[0]
+      replaceResults.value = [...replaceResults.value]
     }
   } catch (e: any) {
     status.value = '❌ ' + e.message
@@ -104,7 +103,7 @@ async function deleteResult(idx: number, filePath: string) {
   if (!confirm('确定删除该替换图吗？')) return
   try {
     await deleteFile(filePath)
-    results.value.splice(idx, 1)
+    replaceResults.value.splice(idx, 1)
     await loadExisting()
   } catch (e: any) {
     status.value = '❌ ' + e.message
@@ -118,11 +117,11 @@ async function deleteResult(idx: number, filePath: string) {
 
     <!-- 已上传的图 -->
     <div class="replace-grid">
-      <div v-for="(img, idx) in userImages" :key="idx" class="replace-item">
+      <div v-for="(img, idx) in replaceImages" :key="idx" class="replace-item">
         <div class="replace-img-wrap">
-          <img :src="img" class="replace-img" @click="openUpload(idx)" />
+          <img :src="img" class="replace-img" @click="previewImage(img)" />
         </div>
-        <input v-model="userPrompts[idx]"
+        <input v-model="replacePrompts[idx]"
           @input="(e: any) => updatePrompt(idx, e.target.value)"
           placeholder="必填：输入替换要求" class="prompt-input" />
         <button class="btn-remove" @click="removeImage(idx)">删除</button>
@@ -150,11 +149,11 @@ async function deleteResult(idx: number, filePath: string) {
     </div>
 
     <!-- 结果展示 -->
-    <div v-if="results.length > 0" class="results-section">
+    <div v-if="replaceResults.length > 0" class="results-section">
       <div class="results-title">🖼️ 替换结果</div>
       <div class="results-grid">
-        <div v-for="(r, ri) in results" :key="ri" class="result-item">
-          <img :src="'/api/ai-image/image-file?path=' + encodeURIComponent(r.path) + '&t=' + Date.now()" class="result-img" />
+        <div v-for="(r, ri) in replaceResults" :key="ri" class="result-item">
+          <img :src="getResultUrl(r.path)" class="result-img" @click="previewImage(getResultUrl(r.path))" />
           <div class="result-name">{{ r.key }}</div>
           <div class="result-actions">
             <button class="btn-regenerate" @click="regenerate(ri)">🔄 重新生成</button>
