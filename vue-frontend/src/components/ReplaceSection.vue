@@ -3,19 +3,24 @@ import { ref, watch, inject } from "vue"
 import { useAiState } from '../composables/useAiState'
 import { replaceImages as apiReplaceImages, listReplaceResults, deleteFile } from '../api/aiImage'
 import UploadModal from './UploadModal.vue'
+import WhiteBgSelector from "./WhiteBgSelector.vue"
 
 const { productDir, selectedModel, modelList, replaceImages, replacePrompts, replaceResults } = useAiState()
 
 const loading = ref(false)
 const status = ref('')
-
 const uploadRef = ref<InstanceType<typeof UploadModal>>()
+const showWhiteBgSelector = ref(false)
+const selectedWhiteBgUrls = ref<string[]>([])
 const previewImage = inject<(url: string) => void>("previewImage") || ((url: string) => { window.open(url, "_blank"); })
-function getResultUrl(path: string) { return "/api/ai-image/image-file?path=" + encodeURIComponent(path) + "&t=" + Date.now(); }
+
+function getResultUrl(path: string) { return "/api/ai-image/image-file?path=" + encodeURIComponent(path) + "&t=" + Date.now() }
+
 const uploadIdx = ref(-1)
 
 watch(productDir, async (dir) => {
-  if (dir) await loadExisting()
+  if (!dir) return
+  await loadExisting()
 }, { immediate: true })
 
 async function loadExisting() {
@@ -23,57 +28,49 @@ async function loadExisting() {
   try {
     const data = await listReplaceResults(productDir.value)
     if (data.success && data.images) {
-      replaceResults.value = data.images.map((img, i) => ({
-        key: '替换图' + (i + 1),
-        path: img.path,
-      }))
+      replaceResults.value = data.images.map((img, i) => ({ key: '替换图' + (i + 1), path: img.path }))
     }
   } catch (e) {}
 }
 
-function openUpload(idx: number) {
-  uploadIdx.value = idx
-  uploadRef.value?.open()
-}
-
+function openUpload(idx: number) { uploadIdx.value = idx; uploadRef.value?.open() }
 function onUploadConfirm(data: string) {
-  if (uploadIdx.value === -1) {
-    replaceImages.value.push(data)
-    replacePrompts.value.push('')
-  } else {
-    replaceImages.value[uploadIdx.value] = data
-  }
+  if (uploadIdx.value === -1) { replaceImages.value.push(data); replacePrompts.value.push('') }
+  else { replaceImages.value[uploadIdx.value] = data }
+}
+function removeImage(idx: number) { replaceImages.value.splice(idx, 1); replacePrompts.value.splice(idx, 1) }
+function updatePrompt(idx: number, val: string) { replacePrompts.value[idx] = val }
+
+// 点击生成 → 弹出白底图选择框
+async function onWhiteBgSelected(selected: { path: string }[]) {
+  showWhiteBgSelector.value = false
+  selectedWhiteBgUrls.value = selected.map(img =>
+    "/api/ai-image/image-file?path=" + encodeURIComponent(img.path) + "&t=" + Date.now()
+  )
+  await doGenerateWithRefs()
 }
 
-function removeImage(idx: number) {
-  replaceImages.value.splice(idx, 1)
-  replacePrompts.value.splice(idx, 1)
-}
-
-function updatePrompt(idx: number, val: string) {
-  replacePrompts.value[idx] = val
-}
-
-async function generate() {
-  if (replaceImages.value.length === 0) { status.value = '⚠️ 请先添加图片'; return }
+async function doGenerateWithRefs() {
+  if (replaceImages.value.length === 0) { status.value = "⚠️ 请先添加图片"; return }
   const emptyPrompt = replacePrompts.value.some(p => !p.trim())
-  if (emptyPrompt) { status.value = '⚠️ 请填写所有追加提示词'; return }
+  if (emptyPrompt) { status.value = "⚠️ 请填写所有追加提示词"; return }
   if (!productDir.value) return
 
   loading.value = true
-  status.value = '正在生成...'
+  status.value = "正在生成..."
   try {
     const data = await apiReplaceImages({
       productDir: productDir.value,
       images: replaceImages.value,
       prompts: replacePrompts.value,
       model: selectedModel.value,
+      selectedWhiteBg: selectedWhiteBgUrls.value,
     })
-    status.value = `✅ ${data.succeeded || 0} 成功`
+    status.value = "✅ " + (data.succeeded || 0) + " 成功"
     if (data.results) replaceResults.value = data.results
     await loadExisting()
   } catch (e: any) {
-    status.value = '❌ ' + e.message
+    status.value = "❌ " + e.message
   }
   loading.value = false
 }
@@ -87,15 +84,14 @@ async function regenerate(idx: number) {
       images: [replaceImages.value[idx]],
       prompts: [replacePrompts.value[idx] || ''],
       model: selectedModel.value,
+      selectedWhiteBg: selectedWhiteBgUrls.value,
     })
     if (data.results?.[0]) {
       if (!replaceResults.value[idx]) replaceResults.value[idx] = data.results[0]
       else replaceResults.value[idx] = data.results[0]
       replaceResults.value = [...replaceResults.value]
     }
-  } catch (e: any) {
-    status.value = '❌ ' + e.message
-  }
+  } catch (e: any) { status.value = "❌ " + e.message }
   loading.value = false
 }
 
@@ -105,24 +101,18 @@ async function deleteResult(idx: number, filePath: string) {
     await deleteFile(filePath)
     replaceResults.value.splice(idx, 1)
     await loadExisting()
-  } catch (e: any) {
-    status.value = '❌ ' + e.message
-  }
+  } catch (e: any) { status.value = "❌ " + e.message }
 }
 </script>
-
 <template>
   <div class="replace-section">
     <div class="section-title">🔄 替换图</div>
-
-    <!-- 已上传的图 -->
     <div class="replace-grid">
       <div v-for="(img, idx) in replaceImages" :key="idx" class="replace-item">
         <div class="replace-img-wrap">
           <img :src="img" class="replace-img" @click="previewImage(img)" />
         </div>
-        <input v-model="replacePrompts[idx]"
-          @input="(e: any) => updatePrompt(idx, e.target.value)"
+        <input :value="replacePrompts[idx]" @input="(e: any) => updatePrompt(idx, e.target.value)"
           placeholder="必填：输入替换要求" class="prompt-input" />
         <button class="btn-remove" @click="removeImage(idx)">删除</button>
       </div>
@@ -130,8 +120,6 @@ async function deleteResult(idx: number, filePath: string) {
         <div class="add-box"><span>+</span><span>添加图</span></div>
       </div>
     </div>
-
-    <!-- 模型选择 -->
     <div class="model-select">
       <label>图生成ai模型：</label>
       <select v-model="selectedModel">
@@ -139,16 +127,12 @@ async function deleteResult(idx: number, filePath: string) {
         <option value="black-forest-labs/FLUX.1-schnell">FLUX.1 Schnell</option>
       </select>
     </div>
-
-    <!-- 生成按钮 -->
     <div class="gen-bar">
       <span class="gen-status">{{ status }}</span>
-      <button class="btn-gen" :disabled="loading" @click="generate">
+      <button class="btn-gen" :disabled="loading" @click="showWhiteBgSelector = true">
         {{ loading ? '⏳ 生成中...' : '🚀 生成替换图' }}
       </button>
     </div>
-
-    <!-- 结果展示 -->
     <div v-if="replaceResults.length > 0" class="results-section">
       <div class="results-title">🖼️ 替换结果</div>
       <div class="results-grid">
@@ -162,11 +146,10 @@ async function deleteResult(idx: number, filePath: string) {
         </div>
       </div>
     </div>
-
     <UploadModal ref="uploadRef" @confirm="onUploadConfirm" />
+    <WhiteBgSelector v-if="showWhiteBgSelector" :productDir="productDir" @confirm="onWhiteBgSelected" @close="showWhiteBgSelector = false" />
   </div>
 </template>
-
 <style scoped>
 .replace-section { padding: 10px 0; }
 .section-title { font-size: 13px; font-weight: 600; margin-bottom: 12px; }

@@ -23,8 +23,9 @@ public class ReplaceController {
         @SuppressWarnings("unchecked") List<String> prompts = (List<String>) request.get("prompts");
         if (productDir == null || images == null || images.isEmpty()) return ResponseEntity.badRequest().body(Map.of("success", false, "error", "缺少参数"));
         String model = (String) request.get("model");
+        @SuppressWarnings("unchecked") List<String> selectedWhiteBg = (List<String>) request.get("selectedWhiteBg");
         if (model == null || model.isEmpty()) model = "black-forest-labs/FLUX.1-schnell";
-        return ResponseEntity.ok(replaceService.generateReplacements(productDir, images, prompts, model));
+        return ResponseEntity.ok(replaceService.generateReplacements(productDir, images, prompts, model, selectedWhiteBg));
     }
 
     @GetMapping("/list-replace-images")

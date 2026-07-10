@@ -33,7 +33,7 @@ public class ReplaceService {
     }
 
     /** 替换图生成 */
-    public Map<String, Object> generateReplacements(String productDir, List<String> images, List<String> prompts, String model) {
+    public Map<String, Object> generateReplacements(String productDir, List<String> images, List<String> prompts, String model, List<String> selectedWhiteBg) {
         List<Map<String, Object>> results = new ArrayList<>();
         List<Map<String, Object>> errors = new ArrayList<>();
 
@@ -53,9 +53,15 @@ public class ReplaceService {
                 if (!extraPrompt.isEmpty()) prompt += "\n用户补充说明：" + extraPrompt;
 
                 // 参考图
+                // 参考图：用户选择的白底图
                 List<String> refs = new ArrayList<>();
-                for (String p : openRouterService.stitchDirToFiles(Paths.get(productDir, "白底图"), "替换_白底图参考.jpg", 3)) {
-                    refs.add(baseUrl + "/api/ai-image/image-file?path=" + java.net.URLEncoder.encode(p, StandardCharsets.UTF_8));
+                if (selectedWhiteBg != null && !selectedWhiteBg.isEmpty()) {
+                    refs.addAll(selectedWhiteBg);
+                } else {
+                    // 未选择则自动拼接
+                    for (String p : openRouterService.stitchDirToFiles(Paths.get(productDir, "白底图"), "替换_白底图参考.jpg", 3)) {
+                        refs.add(baseUrl + "/api/ai-image/image-file?path=" + java.net.URLEncoder.encode(p, StandardCharsets.UTF_8));
+                    }
                 }
                 // 用户图保存到临时目录做参考
                 try {

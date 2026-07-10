@@ -63,7 +63,7 @@ export function uploadWhiteBg(productDir: string, image: string): Promise<{ succ
 
 // ===== 替换图 =====
 export function replaceImages(data: {
-  productDir: string; images: string[]; prompts: string[]; model: string
+  productDir: string; images: string[]; prompts: string[]; model: string; selectedWhiteBg?: string[]
 }): Promise<{ success: boolean; results?: { key: string; path: string }[]; succeeded?: number }> {
   return fetchJson(`${API}/replace`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
