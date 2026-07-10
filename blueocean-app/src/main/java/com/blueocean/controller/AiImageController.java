@@ -687,9 +687,25 @@ public class AiImageController {
                     prompt += "\n用户补充说明：" + extraPrompt;
                 }
 
-                // 白底图参考 + 用户图作为参考
-                List<String> refs = openRouterService.stitchDirToBase64(Paths.get(productDir, "白底图"), "替换_白底图参考.jpg", 3);
-                refs.add(userImg);
+                // 白底图参考（HTTP URL）
+                List<String> refs = new ArrayList<>();
+                String baseUrl2 = publicUrl != null && !publicUrl.isEmpty() ? publicUrl : "http://127.0.0.1:8080";
+                for (String p : openRouterService.stitchDirToFiles(Paths.get(productDir, "白底图"), "替换_白底图参考.jpg", 3)) {
+                    String e = java.net.URLEncoder.encode(p, java.nio.charset.StandardCharsets.UTF_8);
+                    refs.add(baseUrl2 + "/api/ai-image/image-file?path=" + e);
+                }
+                // 用户图保存到文件再拼 URL
+                try {
+                    String imgData = userImg.contains(",") ? userImg.substring(userImg.indexOf(',') + 1) : userImg;
+                    byte[] imgBytes = java.util.Base64.getDecoder().decode(imgData);
+                    Path tdir = Paths.get(System.getProperty("java.io.tmpdir"), "ai-ref", "replace");
+                    Files.createDirectories(tdir);
+                    Path tf = tdir.resolve("user_" + i + ".jpg");
+                    javax.imageio.ImageIO.write(javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(imgBytes)), "jpg", tf.toFile());
+                    refs.add(baseUrl2 + "/api/ai-image/image-file?path=" + java.net.URLEncoder.encode(tf.toString(), java.nio.charset.StandardCharsets.UTF_8));
+                } catch (Exception ex) {
+                    refs.add(userImg);
+                }
                 if (refs.size() > 4) refs = new ArrayList<>(refs.subList(0, 4));
 
                 String savedPath = openRouterService.generateImageWithRefs(
@@ -835,16 +851,17 @@ public class AiImageController {
                 "\n" +
                 "专业影棚柔光打光，光影均匀柔和，产品立体有质感，无过曝、无硬阴影，边缘清晰。整体风格简约高级，无多余装饰元素，所有文字准确无错字、无乱码、字体统一。");
 
-        taobaoPrompts.put("图2", "核心卖点图・痛点解决方案\n" +
-                "核心逻辑：量化核心卖点 + 直击用户痛点 + 功能可视化呈现\n" +
-                "plaintext\n" +
-                "电商产品卖点主图，正方形1440×1440像素。画面中心偏上放置【商品全称】的核心展示视角，清晰呈现产品核心功能结构。\n" +
-                "画面均匀分布3个核心卖点模块，搭配极简线性图标，每个模块配清晰黑体文案：\n" +
-                "1. 【卖点1：功能+用户价值】\n" +
-                "2. 【卖点2：材质+差异化优势】\n" +
-                "3. 【卖点3：体验+实际好处】\n" +
-                "画面顶部居中放置加粗主标题文案：【一句话痛点解决方案】，字体醒目不突兀。\n" +
-                "背景为纯净浅色系，整体干净整洁，产品材质细节真实还原。专业无影棚光效，光影均匀，整体风格专业可信，所有文字清晰准确、字");
+        taobaoPrompts.put("图2", "本图为纯商品展示电商首图，不做促销活动图。画面禁止出现任何价格数字、满减、折扣、限时、爆款、好礼、赠品、包邮、售后退换、福利、抢购、下单等促销或服务类文字、色块、图标；禁止用方括号、大括号、竖线、符号装饰标题。所有文字仅可表达产品功能、材质、卖点、品类信息。\n" +
+                "\n" +
+                "电商产品首图，正方形1440×1440像素。【商品全称】为画面绝对视觉主体，产品完整清晰展示，占据画面主要视觉重心，采用自然且能突出产品外观的展示角度，重点呈现产品核心结构、形态轮廓、厚度层次和关键功能特征。产品真实还原【核心材质描述】的质感，材质细节清晰，色泽自然，整体干净高级。\n" +
+                "\n" +
+                "背景为低饱和同色系渐变或极简浅色影棚背景，画面简洁，主体突出，不使用复杂场景干扰产品展示。\n" +
+                "\n" +
+                "画面文字由AI根据产品结构和画面视觉重心自主排版，只要求信息层级清晰、阅读顺序自然、不遮挡产品核心结构。允许AI自主决定标题、副标题、卖点标签的位置、大小、颜色、字体样式和排版形式，但整体风格必须简约、干净、克制，符合电商首图视觉标准。\n" +
+                "\n" +
+                "可出现的文字内容仅限：产品功能、材质、卖点、品类相关信息。\n" +
+                "\n" +
+                "专业影棚柔光打光，光影均匀柔和，产品立体有质感，无过曝、无硬阴影，边缘清晰。整体风格简约高级，无多余装饰元素，所有文字准确无错字、无乱码、字体统一。");
         taobaoPrompts.put("图3",
                 "1. 核心搜索词（替换成当前产品热搜词/精准词）\n" +
                 "【产品核心热搜词、精准类目词、用户常用搜索词、场景关联词】\n" +
