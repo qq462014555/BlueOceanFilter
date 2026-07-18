@@ -42,6 +42,7 @@ com\blueocean\controller\ChromePortMonitorController.class
 com\blueocean\service\OpenRouterService.class
 com\blueocean\controller\FileManagerController$1.class
 com\blueocean\service\ImageFileService.class
+com\blueocean\entity\OrderSupplement.class
 com\blueocean\ocr\PaddleOcrService.class
 com\blueocean\service\AnalysisService.class
 com\blueocean\controller\ScraperController.class
@@ -54,6 +55,7 @@ com\blueocean\sku\SkuFillService.class
 com\blueocean\scraper\MerchantAttributeExtractor.class
 com\blueocean\controller\AttributeAutoFillController.class
 com\blueocean\service\AttributeAutoFillService.class
+com\blueocean\mapper\OrderSupplementMapper.class
 com\blueocean\service\DeepSeekService.class
 com\blueocean\sku\extractor\SkuAttrExtractor.class
 com\blueocean\service\SignalConsumer.class

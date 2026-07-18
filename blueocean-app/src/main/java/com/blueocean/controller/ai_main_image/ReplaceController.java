@@ -32,4 +32,17 @@ public class ReplaceController {
     public ResponseEntity<Map<String, Object>> listReplaceImages(@RequestParam String productDir) {
         return ResponseEntity.ok(Map.of("success", true, "images", replaceService.listReplaceImages(productDir)));
     }
+    @PostMapping("/save-replace-cache")
+    public ResponseEntity<Map<String, Object>> saveReplaceCache(@RequestBody Map<String, Object> request) {
+        String productDir = (String) request.get("productDir");
+        @SuppressWarnings("unchecked") List<String> images = (List<String>) request.get("images");
+        if (productDir == null || images == null) return ResponseEntity.badRequest().body(Map.of("success", false, "error", "缺少参数"));
+        replaceService.saveReplaceImages(productDir, images);
+        return ResponseEntity.ok(Map.of("success", true));
+    }
+
+    @GetMapping("/get-replace-cache")
+    public ResponseEntity<Map<String, Object>> getReplaceCache(@RequestParam String productDir) {
+        return ResponseEntity.ok(Map.of("success", true, "images", replaceService.getReplaceImages(productDir)));
+    }
 }

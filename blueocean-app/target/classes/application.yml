@@ -29,8 +29,8 @@ logging:
 
 mybatis-plus:
   mapper-locations: classpath:mapper/*.xml
-#  configuration:
-#    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
 
 app:
   dashscope-api-key: sk-af8375bb801743cb8dccd5b76e62ecc9
@@ -38,7 +38,7 @@ app:
   openrouter-api-key: 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
   lk888-api-key: sk-862109526e96c8d06f4c789717481204c0183b4cfa10a9f9
   image2-provider: lk888
-  public-url: http://2f300068.r2.cpolar.top
+  public-url: http://47e9a9ab.r2.cpolar.top
   proxy-host: 127.0.0.1
   proxy-port: 7897
   batch-size: 200
@@ -52,4 +52,5 @@ app:
     9223: C:\chrome-debug-merchant
     9224: C:\chrome-debug-taobao
   taobao-target-url: https://sxkc.wusetech.com/administrator-list
+  supplement-image-dir: C:\Users\46201\Pictures\补单
 

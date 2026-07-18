@@ -27,6 +27,7 @@ G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\service\DetailImage
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\service\OpenRouterImage2Provider.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\scraper\SkuData.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\BlueOceanApplication.java
+G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\mapper\OrderSupplementMapper.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\service\DeepSeekService.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\service\ReplaceService.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\sku\extractor\PresetAttrExtractor.java
@@ -66,6 +67,7 @@ G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\scraper\AttributeSa
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\controller\ChromePortMonitorController.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\controller\QianniuAttributeController.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\config\AppProperties.java
+G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\entity\OrderSupplement.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\scraper\MerchantAttributeExtractor.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\service\AttributeMappingService.java
 G:\BlueOceanFilter\blueocean-app\src\main\java\com\blueocean\sku\SkuFillController.java

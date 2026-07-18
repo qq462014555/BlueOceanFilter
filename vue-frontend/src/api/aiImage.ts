@@ -74,6 +74,16 @@ export function listReplaceResults(productDir: string): Promise<{ success: boole
   return fetchJson(`${API}/list-replace-images?productDir=${encodeURIComponent(productDir)}`)
 }
 
+export function saveReplaceCache(productDir: string, images: string[]): Promise<{ success: boolean }> {
+  return fetchJson(`${API}/save-replace-cache`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ productDir, images }),
+  })
+}
+
+export function getReplaceCache(productDir: string): Promise<{ success: boolean; images?: string[] }> {
+  return fetchJson(`${API}/get-replace-cache?productDir=${encodeURIComponent(productDir)}`)
+}
+
 // ===== 文件操作 =====
 export function deleteFile(path: string): Promise<{ success: boolean; error?: string }> {
   return fetchJson(`${API}/delete-file`, {
