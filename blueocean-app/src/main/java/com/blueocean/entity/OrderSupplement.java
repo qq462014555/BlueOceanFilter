@@ -36,6 +36,10 @@ public class OrderSupplement {
     @DecimalMin(value = "0.01", message = "价格必须大于0")
     private BigDecimal price;
 
+    private Integer quantity;
+
+    private String remark;
+
     private String reviewImage;
     private String reviewText;
 
@@ -67,6 +71,12 @@ public class OrderSupplement {
 
     public BigDecimal getPrice() { return price; }
     public void setPrice(BigDecimal price) { this.price = price; }
+
+    public Integer getQuantity() { return quantity; }
+    public void setQuantity(Integer quantity) { this.quantity = quantity; }
+
+    public String getRemark() { return remark; }
+    public void setRemark(String remark) { this.remark = remark; }
 
     public String getReviewImage() { return reviewImage; }
     public void setReviewImage(String reviewImage) { this.reviewImage = reviewImage; }

@@ -136,7 +136,7 @@ public class AnalysisService {
         } catch (Exception e) { log.warn("加载提示词失败: {}", e.getMessage()); }
         Map<String, Map<String, String>> def = new LinkedHashMap<>();
         for (String p : List.of("taobao", "douyin", "shopee")) {
-            Map<String, String> m = new LinkedHashMap<>(); for (int i = 1; i <= 5; i++) m.put("图" + i, ""); def.put(p, m);
+            def.put(p, getDefaultPrompts(p));
         }
         return def;
     }

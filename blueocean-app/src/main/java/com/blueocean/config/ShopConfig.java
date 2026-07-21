@@ -14,10 +14,9 @@ public class ShopConfig {
         return List.of(
                 shop("淘宝", "tb35238016", "心情喵Koi品趣"),
                 shop("淘宝", "tb9327549327", "KimBaL品选趣店"),
-                shop("淘宝", "tb35238016", "KimBaL品选趣店"),
-                shop("淘宝", "jgj1101110", "心情喵乐活店"),
-                shop("抖音", "jgj1101110", "心情喵乐活店")
-        );
+                shop("淘宝", "jgj1101112", "KIMBALL品趣"),
+                shop("淘宝", "jgj1101110", "心情喵乐活店")
+                );
     }
 
     /**

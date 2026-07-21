@@ -6,6 +6,8 @@ export interface OrderSupplement {
   productId: string
   skuId?: string
   price: number
+  quantity?: number
+  remark?: string
   reviewImage?: string
   reviewText?: string
   resourceParty?: string
@@ -33,4 +35,4 @@ export function shopDisplay(s: ShopInfo) {
   return `${s.platform}/${s.shopName}/${s.shopId}`
 }
 
-export const STATUS_LIST = ['待补单', '已补单', '取消补单']
+export const STATUS_LIST = ['待补单', '补单中', '已补单', '取消补单']

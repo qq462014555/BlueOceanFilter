@@ -142,6 +142,20 @@ public class OrderSupplementController {
     }
 
     /**
+     * 导出组内记录到Excel（使用模板）
+     */
+    @GetMapping("/export-excel")
+    public void exportExcel(@RequestParam Long groupId, jakarta.servlet.http.HttpServletResponse response) throws IOException {
+        try {
+            service.exportToExcel(groupId, response);
+        } catch (Exception e) {
+            log.error("导出Excel失败", e);
+            response.setContentType("text/plain;charset=UTF-8");
+            response.getWriter().write("导出失败: " + e.getMessage());
+        }
+    }
+
+    /**
      * 绑定记录到已有组
      */
     @PostMapping("/bind-group")
@@ -209,6 +223,48 @@ public class OrderSupplementController {
             return ResponseEntity.ok(List.of());
         }
         return ResponseEntity.ok(service.searchResourceParties(keyword.trim()));
+    }
+
+    /**
+     * 根据组ID生成下单二维码URL
+     */
+    @PostMapping("/mark-sending")
+    public ResponseEntity<Map<String, Object>> markSending(@RequestBody Map<String, Object> request) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        try {
+            Long groupId = Long.valueOf(request.get("groupId").toString());
+            service.markGroupSending(groupId);
+            result.put("success", true);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            log.error("标记补单中失败", e);
+            result.put("success", false);
+            result.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(result);
+        }
+    }
+
+    @GetMapping("/order-url")
+    public ResponseEntity<Map<String, Object>> getOrderUrl(@RequestParam Long groupId) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        try {
+            String url = service.generateOrderUrl(groupId);
+            result.put("success", true);
+            result.put("url", url);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            result.put("success", false);
+            result.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(result);
+        }
+    }
+
+    /**
+     * 根据组ID查询组内所有记录
+     */
+    @GetMapping("/list-by-group")
+    public ResponseEntity<List<OrderSupplement>> listByGroupId(@RequestParam Long groupId) {
+        return ResponseEntity.ok(service.listByGroupId(groupId));
     }
 
     /**

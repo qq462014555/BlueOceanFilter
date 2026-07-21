@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { listRecords, createRecord, updateRecord, deleteRecord, uploadImage, getImageUrl, fetchShops, searchResourceParties, ungroupRecord as ungroupRecordApi, bindGroup } from '../api/orderSupplement'
+import { listRecords, createRecord, updateRecord, deleteRecord, uploadImage, getImageUrl, fetchShops, searchResourceParties, ungroupRecord as ungroupRecordApi, bindGroup, listByGroupId, markSending } from '../api/orderSupplement'
 import QrOrderDialog from './QrOrderDialog.vue'
 import { shopDisplay, STATUS_LIST } from '../types/orderSupplement'
 import type { OrderSupplement, ShopInfo } from '../types/orderSupplement'
@@ -51,7 +51,7 @@ function checkBlur(field: string, val: any) {
   if (field === 'productName') errProductName.value = empty
   else if (field === 'productId') errProductId.value = empty
   else if (field === 'skuId') errSkuId.value = empty
-  else if (field === 'price') errPrice.value = empty
+  else if (field === 'price') errPrice.value = empty || Number(val) > 1000
 }
 
 // 选择 & 归组
@@ -61,6 +61,7 @@ const groupDate = ref('')
 const groupResourceParty = ref('')
 const showQrDialog = ref(false)
 const qrRecords = ref<OrderSupplement[]>([])
+const qrGroupId = ref<number | null>(null)
 const rpSuggestions = ref<{ id: number; resource_party: string }[]>([])
 const rpShowDropdown = ref(false)
 const selectedGroupId = ref<number | null>(null)
@@ -170,7 +171,7 @@ function openAdd() {
     localStorage.removeItem('order_supplement_form_cache')
   } else {
     const defaultShop = shops.value[0] ? shopDisplay(shops.value[0]) : ''
-    form.value = { shopId: defaultShop, productName: '', productId: '', skuId: '', price: null as any, reviewImage: '', reviewText: '', status: '待补单' }
+    form.value = { shopId: defaultShop, productName: '', productId: '', skuId: '', price: null as any, quantity: null as any, remark: '', reviewImage: '', reviewText: '', status: '待补单' }
   }
   imagePaths.value = []
   showForm.value = true
@@ -203,6 +204,7 @@ async function saveForm() {
   if (!form.value.skuId?.trim()) { missing.push('商品SKU ID'); errSkuId.value = true }
   if (form.value.price == null || form.value.price === '' as any) { missing.push('价格'); errPrice.value = true }
   if (missing.length) { setFormMsg('请填写：' + missing.join('、')); return }
+  if (form.value.price > 1000) { setFormMsg('价格不能超过1000'); errPrice.value = true; return }
 
   try {
     const payload = { ...form.value }
@@ -235,6 +237,39 @@ function ungroupRecord(id: number) {
     } catch (e: any) { setFormMsg('取消绑定失败: ' + (e as any).message) }
   })
 }
+// 下单二维码（从后端获取同组所有记录）
+async function openQrRowDialog(row: OrderSupplement) {
+  if (!row.groupId) return
+  try {
+    qrGroupId.value = row.groupId
+    qrRecords.value = await listByGroupId(row.groupId)
+    showQrDialog.value = true
+  } catch {}
+}
+
+// 已发给刷手
+async function markAsSending() {
+  const sel = records.value.filter(r => (selectedIds.value as Set<number>).has(r.id!) && r.groupId)
+  const groupIds = [...new Set(sel.map(r => r.groupId!))]
+  if (groupIds.length === 0) return
+  showConfirm('确定标记为"已发给刷手"吗？', async () => {
+    try {
+      await markSending(groupIds[0])
+      selectedIds.value = new Set()
+      await fetchList()
+    } catch (e: any) { setFormMsg('操作失败: ' + (e as any).message) }
+  })
+}
+
+// 导出Excel
+function exportExcel() {
+  const sel = records.value.filter(r => (selectedIds.value as Set<number>).has(r.id!) && r.groupId)
+  const groupIds = [...new Set(sel.map(r => r.groupId!))]
+  if (groupIds.length === 1) {
+    window.open(`/api/order-supplement/export-excel?groupId=${groupIds[0]}`, '_blank')
+  }
+}
+
 function confirmOk() {
   if (confirmCb) confirmCb()
   confirmMsg.value = ''; confirmCb = null
@@ -350,6 +385,8 @@ async function confirmGroup() {
       <button class="btn-add" @click="openAdd">+ 新增</button>
       <span style="flex:1"></span>
       <button class="btn-group" @click="openGroupForm" :disabled="selectedIds.size === 0">归组 ({{ selectedIds.size }})</button>
+      <button class="btn-export" @click="exportExcel" :disabled="selectedIds.size === 0">导出Excel</button>
+      <button class="btn-sending" @click="markAsSending" :disabled="selectedIds.size === 0">已发给刷手</button>
     </div>
 
     <!-- 表格 -->
@@ -364,15 +401,18 @@ async function confirmGroup() {
             <th @click="toggleSort('productId')">商品ID {{ sortIcon('productId') }}</th>
             <th @click="toggleSort('skuId')">SKU ID {{ sortIcon('skuId') }}</th>
             <th @click="toggleSort('price')">价格 {{ sortIcon('price') }}</th>
-            <th>评论</th>
+            <th>拍单数量</th>
+            <th>备注</th>
+            <th>评价文案</th>
+            <th>评价图</th>
             <th>资源方</th>
             <th @click="toggleSort('status')">状态 {{ sortIcon('status') }}</th>
             <th>操作</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-if="loading"><td colspan="11" class="td-loading">加载中...</td></tr>
-          <tr v-else-if="records.length === 0"><td colspan="11" class="td-empty">暂无数据</td></tr>
+          <tr v-if="loading"><td colspan="14" class="td-loading">加载中...</td></tr>
+          <tr v-else-if="records.length === 0"><td colspan="14" class="td-empty">暂无数据</td></tr>
           <tr v-for="row in records" :key="row.id">
             <td>
               <span v-if="row.groupId" class="chk-disabled">✕</span>
@@ -384,8 +424,12 @@ async function confirmGroup() {
             <td>{{ row.productId || '-' }}</td>
             <td>{{ row.skuId || '-' }}</td>
             <td>{{ row.price }}</td>
+            <td>{{ row.quantity || '-' }}</td>
+            <td>{{ row.remark || '-' }}</td>
             <td class="td-review">
               <div class="review-text">{{ row.reviewText || '-' }}</div>
+            </td>
+            <td class="td-review">
               <div class="review-images">
                 <div v-for="(img, idx) in (row.reviewImage || '').split(',').filter(Boolean)" :key="idx" class="img-cell">
                   <img :src="parseImagePath(img).url" class="thumb" @mouseenter="(e) => { const t = e.target as HTMLImageElement; t.style.transform = 'scale(3)'; t.style.zIndex = '10' }"
@@ -398,9 +442,15 @@ async function confirmGroup() {
             <td>{{ row.groupId && row.resourceParty ? (row.groupId + ' - ' + row.resourceParty) : (row.resourceParty || '-') }}</td>
             <td><span :class="'status-tag status-' + row.status">{{ row.status }}</span></td>
             <td class="td-actions">
-              <button class="btn-edit" @click="openEdit(row)">编辑</button>
-              <button class="btn-del" @click="removeRecord(row.id!)">删除</button>
-              <button v-if="row.groupId" class="btn-ungroup" @click="ungroupRecord(row.id!)">取消绑定组</button>
+              <template v-if="row.status === '补单中'">
+                <button class="btn-qr-row" @click="openQrRowDialog(row)">下单二维码</button>
+              </template>
+              <template v-else>
+                <button class="btn-edit" @click="openEdit(row)">编辑</button>
+                <button class="btn-del" @click="removeRecord(row.id!)">删除</button>
+                <button v-if="row.groupId" class="btn-ungroup" @click="ungroupRecord(row.id!)">取消绑定组</button>
+                <button v-if="row.groupId" class="btn-qr-row" @click="openQrRowDialog(row)">下单二维码</button>
+              </template>
             </td>
           </tr>
         </tbody>
@@ -425,6 +475,8 @@ async function confirmGroup() {
           <label><div class="label-text"><span class="required">*</span>商品ID</div><input v-model="form.productId" @blur="checkBlur('productId', form.productId)" :class="{ 'input-err': errProductId }" /><span v-if="errProductId" class="err-msg">必填</span></label>
           <label><div class="label-text"><span class="required">*</span>商品SKU ID</div><div class="input-with-btn"><input v-model="form.skuId" @blur="checkBlur('skuId', form.skuId)" :class="{ 'input-err': errSkuId }" /><button v-if="form.productId?.trim()" class="btn-open-url" title="用浏览器打开商品链接" @click="openTaobaoUrl">🔗</button></div><span v-if="errSkuId" class="err-msg">必填</span></label>
           <label><div class="label-text"><span class="required">*</span>价格</div><input type="number" v-model="form.price" @blur="checkBlur('price', form.price)" :class="{ 'input-err': errPrice }" /><span v-if="errPrice" class="err-msg">必填</span></label>
+          <label><div class="label-text">拍单数量</div><input type="number" v-model.number="form.quantity" min="1" step="1" oninput="if(this.value<1)this.value=1;if(this.value.includes('.'))this.value=parseInt(this.value)" placeholder="正整数" /></label>
+          <label><div class="label-text">备注</div><input v-model="form.remark" placeholder="价格备注" /></label>
           <label class="full-width">评论文本 <textarea v-model="form.reviewText" rows="3"></textarea></label>
           <label class="full-width">
             评论图片
@@ -486,6 +538,8 @@ async function confirmGroup() {
       </div>
     </div>
 
+    <QrOrderDialog v-if="showQrDialog && qrGroupId" :groupId="qrGroupId" :records="qrRecords" @close="showQrDialog = false" @refresh="fetchList" />
+
     <UploadModal ref="uploadRef" @confirm="onUploadConfirm" />
   </div>
 </template>
@@ -505,6 +559,11 @@ async function confirmGroup() {
 .btn-group { padding: 6px 16px; border: none; border-radius: 6px; background: #fa8c16; color: #fff; cursor: pointer; font-weight: 600; }
 .action-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
 .btn-group:disabled { background: #d9d9d9; cursor: not-allowed; }
+.btn-qr-row { padding: 2px 8px; border: 1px solid #722ed1; border-radius: 4px; background: #fff; color: #722ed1; cursor: pointer; font-size: 12px; }
+.btn-export { padding: 6px 16px; border: none; border-radius: 6px; background: #52c41a; color: #fff; cursor: pointer; font-weight: 600; }
+.btn-export:disabled { background: #d9d9d9; cursor: not-allowed; }
+.btn-sending { padding: 6px 16px; border: none; border-radius: 6px; background: #1890ff; color: #fff; cursor: pointer; font-weight: 600; }
+.btn-sending:disabled { background: #d9d9d9; cursor: not-allowed; }
 
 .table-wrap { overflow-x: auto; }
 .data-table { width: 100%; border-collapse: collapse; white-space: nowrap; }
@@ -515,19 +574,21 @@ async function confirmGroup() {
 .td-review .review-text { text-align: left; }
 .td-loading, .td-empty { text-align: center; color: #999; padding: 30px !important; }
 
-.td-review { max-width: 450px; white-space: normal; word-break: break-word; overflow-wrap: break-word; }
+.td-review { white-space: normal; word-break: break-word; overflow-wrap: break-word; min-width: 100px; }
 .review-text { word-break: break-word; overflow-wrap: break-word; line-height: 1.5; max-height: 80px; overflow-y: auto; }
 .review-text { margin-bottom: 6px; font-size: 12px; color: #333; }
-.review-images { display: flex; gap: 6px; flex-wrap: wrap; }
-.img-cell { text-align: center; }
+.review-images { display: flex; flex-wrap: wrap; gap: 4px; min-width: 110px; }
 .thumb { width: 50px; height: 50px; object-fit: cover; border-radius: 4px; border: 1px solid #e0e0e0; cursor: pointer; transition: transform 0.15s; position: relative; }
 .thumb:hover { position: relative; z-index: 10; border-color: #667eea; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
-.img-size { font-size: 10px; color: #999; margin-top: 2px; }
+.img-size { font-size: 10px; color: #999; margin-top: 2px; text-align: center; }
+.img-placeholder { color: #ccc; font-size: 14px; line-height: 50px; text-align: center; }
+.img-cell { text-align: center; }
 
 .status-tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
 .status-待补单 { background: #fff7e6; color: #fa8c16; border: 1px solid #ffd591; }
 .status-已补单 { background: #f6ffed; color: #52c41a; border: 1px solid #b7eb8f; }
 .status-取消补单 { background: #fff1f0; color: #ff4d4f; border: 1px solid #ffa39e; }
+.status-补单中 { background: #fff0e6; color: #d4380d; border: 1px solid #ffbb96; font-weight: 600; }
 
 .td-actions { display: flex; gap: 4px; }
 .btn-edit { padding: 2px 10px; border: 1px solid #667eea; border-radius: 4px; background: #fff; color: #667eea; cursor: pointer; font-size: 12px; }

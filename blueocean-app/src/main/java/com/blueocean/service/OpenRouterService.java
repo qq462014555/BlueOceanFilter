@@ -57,7 +57,7 @@ public class  OpenRouterService {
     private String image2Provider;
 
     @jakarta.annotation.Resource
-    private LK888Image2Provider lk888Image2Provider;
+    private LK888Image2Provider cImage2Provider;
 
     // 代理配置（从 application.yml 读取，app.proxy-host / app.proxy-port）
     @Value("${app.proxy-host:}")
@@ -85,7 +85,7 @@ public class  OpenRouterService {
             proxiedClient = null;
         }
         if ("lk888".equals(image2Provider)) {
-            activeImage2Provider = lk888Image2Provider;
+            activeImage2Provider = cImage2Provider;
             log.info("Image2 提供者: LK888");
         } else {
             log.info("Image2 提供者: OpenRouter");

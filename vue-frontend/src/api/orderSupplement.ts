@@ -58,6 +58,23 @@ export function createGroup(data: { recordIds: number[]; date?: string; resource
   })
 }
 
+/** 根据组ID查询组内所有记录 */
+export function listByGroupId(groupId: number): Promise<OrderSupplement[]> {
+  return fetchJson(`${API}/list-by-group?groupId=${groupId}`)
+}
+
+/** 根据组ID获取下单二维码URL */
+export function getOrderUrl(groupId: number): Promise<{ success: boolean; url?: string; error?: string }> {
+  return fetchJson(`${API}/order-url?groupId=${groupId}`)
+}
+
+/** 标记组为"补单中"（已发给刷手） */
+export function markSending(groupId: number): Promise<{ success: boolean; error?: string }> {
+  return fetchJson(`${API}/mark-sending`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ groupId }),
+  })
+}
+
 /** 标记组已发送 */
 export function markSent(groupId: number): Promise<{ success: boolean; error?: string }> {
   return fetchJson(`${API}/mark-sent`, {

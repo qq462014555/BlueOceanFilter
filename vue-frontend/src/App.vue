@@ -49,7 +49,7 @@ body {
   background: #f5f5f5; color: #333;
 }
 .app-container { max-width: 1200px; margin: 0 auto; padding: 20px; }
-.app-container-wide { max-width: 1700px; }
+.app-container-wide { max-width: 2040px; }
 .header {
   background: linear-gradient(135deg, #667eea, #764ba2); color: #fff;
   padding: 24px; border-radius: 12px; margin-bottom: 24px;
@@ -64,5 +64,5 @@ body {
 .nav-bar a:hover { background: #1890ff; color: #fff; }
 .nav-bar a.active { background: #1890ff; color: #fff; }
 .content { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
-.content-wide { max-width: 1700px; margin-left: auto; margin-right: auto; }
+.content-wide { max-width: 2040px; margin-left: auto; margin-right: auto; }
 </style>

@@ -6,9 +6,9 @@ import { PLATFORM_NAMES } from '../types'
 
 const { productDir, platform, prompts, selectedModel, genStatus, genLoading, getPrompt, analysis } = useAiState()
 
-const checkedKeys = ref<string[]>(['图1', '图2', '图3', '图4'])
+const checkedKeys = ref<string[]>(['图1', '图2', '图3', '图4', '图5'])
 const generatedImages = ref<Record<string, string[]>>({})
-const keys = ['图1', '图2', '图3', '图4']
+const keys = ['图1', '图2', '图3', '图4', '图5']
 
 function toggleAll(e: Event) {
   const cb = e.target as HTMLInputElement

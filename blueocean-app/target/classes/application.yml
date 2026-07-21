@@ -1,3 +1,7 @@
+server:
+  tomcat:
+    max-http-form-post-size: 20MB
+
 spring:
   datasource:
     url: jdbc:mysql://localhost:3306/blue?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
@@ -38,7 +42,7 @@ app:
   openrouter-api-key: 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
   lk888-api-key: sk-862109526e96c8d06f4c789717481204c0183b4cfa10a9f9
   image2-provider: lk888
-  public-url: http://47e9a9ab.r2.cpolar.top
+  public-url: http://5f75d547.r2.cpolar.top
   proxy-host: 127.0.0.1
   proxy-port: 7897
   batch-size: 200

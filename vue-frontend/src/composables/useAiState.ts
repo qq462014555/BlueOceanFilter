@@ -16,6 +16,9 @@ const replaceImages = ref<string[]>([])
 const replacePrompts = ref<string[]>([])
 const replaceResults = ref<{ key: string; path: string }[]>([])
 
+// 参考图缓存
+const refImages = ref<string[]>([])
+
 // 多商品缓存
 interface ProductCache {
   analysis: AiAnalysis
@@ -23,6 +26,7 @@ interface ProductCache {
   replaceImages: string[]
   replacePrompts: string[]
   replaceResults: { key: string; path: string }[]
+  refImages: string[]
 }
 const _cache: Record<string, ProductCache> = {}
 
@@ -42,6 +46,7 @@ export function useAiState() {
       replaceImages: [...replaceImages.value],
       replacePrompts: [...replacePrompts.value],
       replaceResults: JSON.parse(JSON.stringify(replaceResults.value)),
+      refImages: [...refImages.value],
     }
   }
 
@@ -53,11 +58,13 @@ export function useAiState() {
       replaceImages.value = [...(cached.replaceImages || [])]
       replacePrompts.value = [...(cached.replacePrompts || [])]
       replaceResults.value = JSON.parse(JSON.stringify(cached.replaceResults || []))
+      refImages.value = [...(cached.refImages || [])]
     } else {
       analysis.value = {}
       replaceImages.value = []
       replacePrompts.value = []
       replaceResults.value = []
+      refImages.value = []
     }
   }
 
@@ -77,7 +84,7 @@ export function useAiState() {
 
   return {
     productDir, platform, analysis, prompts, modelList, selectedModel, genStatus, genLoading,
-    replaceImages, replacePrompts, replaceResults,
+    replaceImages, replacePrompts, replaceResults, refImages,
     setProductDir, setPlatform, setAnalysis, setPrompt, getPrompt, setPromptsForPlatform, setModels,
     saveCache, clearCache, setReplaceData,
   }

@@ -8,6 +8,8 @@ CREATE TABLE IF NOT EXISTS order_supplement (
     product_id  VARCHAR(100) NOT NULL COMMENT '商品ID',
     sku_id      VARCHAR(100) DEFAULT NULL COMMENT '商品SKU ID',
     price       DECIMAL(10,2) DEFAULT 0.00 COMMENT '价格',
+    quantity    INT          DEFAULT 1 COMMENT '拍单数量',
+    remark      VARCHAR(500) DEFAULT NULL COMMENT '价格备注',
     review_image    TEXT     DEFAULT NULL COMMENT '评论图片，逗号分隔的相对路径',
     review_text     TEXT     DEFAULT NULL COMMENT '评论文本',
     status      VARCHAR(20)  NOT NULL DEFAULT '待补单' COMMENT '补单状态：待补单/已补单/取消补单',

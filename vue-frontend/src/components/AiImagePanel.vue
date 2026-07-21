@@ -6,6 +6,7 @@ import AnalysisSection from './AnalysisSection.vue'
 import PromptGrid from './PromptGrid.vue'
 import WhiteBgSection from './WhiteBgSection.vue'
 import ReplaceSection from './ReplaceSection.vue'
+import ReferenceSection from './ReferenceSection.vue'
 
 const props = defineProps<{ productDir: string }>()
 const emit = defineEmits<{ (e: 'update:productDir', v: string): void }>()
@@ -54,7 +55,7 @@ function loadDir() {
         </button>
       </div>
       <div v-if="tab === 'reference'" class="tab-content">
-        <div style="padding:10px 0;color:#999;font-size:13px;">📷 参考图区域</div>
+        <ReferenceSection />
       </div>
       <div v-if="tab === 'replace'" class="tab-content">
         <ReplaceSection />
